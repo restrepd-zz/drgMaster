@@ -31,8 +31,13 @@ winNo=2;
 % evTypeLabels={'Hit','Miss','CR','FA'};
 
 %Analyze S+ S-
-evTypeNos=[2 5];
-evTypeLabels={'Hit','CR'};
+% evTypeNos=[2 5];
+% evTypeLabels={'Hit','CR'};
+
+%Analyze concentrations
+evTypeNos=[9 10 11 12 13 14 15];
+evTypeLabels={'Hi 1','Hi 2','Hi 3','Lo 4','Lo 5','Lo 6','Inter'};
+% no_event_types=7;
 
 ev_to_test_against=1;
 

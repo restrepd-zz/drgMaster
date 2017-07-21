@@ -30,15 +30,17 @@ warning('off')
 
 %THESE VALUES ARE IMPORTANT
 %VERY IMPORTANT: This is the index for this event in your handles.drgbchoices.evTypeNos
-% eventType=[2 5]; %Hit and CR
-% evTypeLabels={'Hit';'CR'};
-% no_event_types=2;
+eventType=[2 5]; %Hit and CR
+no_event_types=2;
+%eventType=1;
+%no_event_types=1;
 
-eventType=[9 10 11 12 13 14 15];
-evTypeLabels={'Hi 1','Hi 2','Hi 3','Lo 4','Lo 5','Lo 6','Inter'};
+evTypeLabels={'Hit';'CR'};
+%evTypeLabels={'tstart'};
+
+eventType=[10 11 12 13 14 15 23];
 no_event_types=7;
-
-
+evTypeLabels={'
 
 %Which percent correct bins do you want to use?
 percent_low=[45 65 80];
@@ -313,7 +315,7 @@ switch which_display
                     if calc_pval(evTN1)==1
                         for ifreq=1:length(frequency)
                             
-                            if p_vals(grNo,per_bin,evTN1,ifreq)<=pFDR(grNo,per_bin)                            
+                            if p_vals(grNo,per_bin,evTN1,ifreq)<=pFDR(grNo,per_bin,evTN1)
                                 plot(frequency(ifreq),this_dB_p_v1_mean(ifreq),these_circles{evTN1})
                             end
                             
