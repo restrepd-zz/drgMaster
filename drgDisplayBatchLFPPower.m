@@ -8,11 +8,17 @@ which_display=1;
 
 % 1 Show the difference between events for each group/ percent correct
 %  bin in a separate graph
+%           FWD vs REV
+
+
 %
 % 2 Show the difference between groups for each event/percent correct
 %  bin in a separate graph
+%           Hit, Miss
+%           Hi, Lo
 
 %Which time window do you want displayed
+%2 = odor on
 winNo=2;
 
 %Do you wnat to subtract the LFP spectrum in a reference window?
@@ -287,7 +293,8 @@ switch which_display
                 end
                 
                 this_legend=['legend([' plot_handles(1:end-1) '],' this_legend(1:end-1) ')'];
-                
+                xlabel('Frequency (Hz)');
+                ylabel('delta Power (dB)');
                 
                 
                 %Now do the bounded lines and the significance points
