@@ -30,13 +30,13 @@ warning('off')
 
 %THESE VALUES ARE IMPORTANT
 %VERY IMPORTANT: This is the index for this event in your handles.drgbchoices.evTypeNos
-% eventType=[2 5]; %Hit and CR
-% evTypeLabels={'Hit';'CR'};
-% no_event_types=2;
+eventType=[2 5 7 4]; %Hit and CR
+evTypeLabels={'Hit';'CR';'FA';'Miss'};
+no_event_types=2;
 
-eventType=[9 10 11 12 13 14 15];
-evTypeLabels={'Hi 1','Hi 2','Hi 3','Lo 4','Lo 5','Lo 6','Inter'};
-no_event_types=7;
+% eventType=[9 10 11 12 13 14 15];
+% evTypeLabels={'Hi 1','Hi 2','Hi 3','Lo 4','Lo 5','Lo 6','Inter'};
+% no_event_types=7;
 
 
 

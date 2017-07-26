@@ -1,4 +1,4 @@
-function [meanVectorLength, meanVectorAngle, peakAngle, MI_Tort, phase, phase_histo, theta_wave]=drgGetThetaAmpPhase(LFPlow,LFPhigh,Fs,lowF1,lowF2,highF1,highF2,time_pad,no_bins,method)
+function [anglethetaLFP]=drgGetSniffPhase(LFPlow,LFPhigh,Fs,lowF1,lowF2,highF1,highF2,time_pad,no_bins,method)
 %Generates the phase histogram for the emvelope and pac
 %function [pac_value, mod_indx, phase, phase_histo, theta_wave]=drgGetThetaAmpPhase(LFP,Fs,lowF1,lowF2,highF1,highF2,time_pad,no_bins)
 
@@ -19,7 +19,7 @@ switch method
     case 2
         %Tort eegfilt
         
-        %First resample data for fast eegfiltlfp
+        %First resample data for fast eegfilt
         rsFs=1024;
         LFPlowrs=resample(LFPlow,rsFs,Fs);    %Note: It is assumed that the high rate will not be larger than 250 Hz
         
@@ -52,23 +52,35 @@ angleThFlGammaEnv = angle(hilbert(thfiltLFPgenv)); % phase modulation of amplitu
 
 
 %Filter LFP theta
-switch method
-    case 1
-        thfiltLFP=filtfilt(bpFilttheta,LFPlow);
-    case 2
-        thfiltLFP = eegfilt(LFPlowrs, rsFs, lowF1, lowF2);
-end
+% switch method
+%     case 1
+%         thfiltLFP=filtfilt(bpFilttheta,LFPlow);
+%     case 2
+%         thfiltLFP = eegfilt(LFPlowrs, rsFs, lowF1, lowF2);
+% end
 
-%thfiltLFP=LFPlow;
+
+
+thfiltLFP=LFPlow;
+
+
 
 anglethetaLFP = angle(hilbert(thfiltLFP)); % phase modulation of amplitude
 
+%Scale the angle
+pct99=prctile(anglethetaLFP,99);
+pct1=prctile(anglethetaLFP,1);
+
+slope=2*pi()/(pct99-pct1);
+int=pi()-2*pi()*pct99/(pct99-pct1);
+
+anglethetaLFP=slope*anglethetaLFP+int;
+
+anglethetaLFP(anglethetaLFP>=pi())=pi()-0.0001;
+anglethetaLFP(anglethetaLFP<=-pi())=-pi()+0.00001;
+
 %This is PAC as defined by Bradley Voytek
 pac_value = abs(sum(exp(1i * (anglethetaLFP - angleThFlGammaEnv)), 'double')) / length(LFPlow);
-
-
-
-
 
 
 %Now generate the histogram
@@ -112,8 +124,8 @@ else
 end
 
 
-% 
-% % %Plot for troubleshooting
+
+% %Plot for troubleshooting
 % figure(10)
 % subplot(3,1,1)
 % plot(LFPgenv)
@@ -126,9 +138,6 @@ end
 % subplot(3,1,3)
 % plot(LFPlow)
 % title('Low frequency LFP/sniff')
-% 
-% pffft=1;
-
 
 
 
