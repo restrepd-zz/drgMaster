@@ -129,8 +129,8 @@ else
         
         meanlicks = mean(thresholded_licks,2);
         totmeanlicks = mean(meanlicks);
-        %         hitxline = [1 2];
-        %         concxline = [concxline, concx];
+%         hitxline = [1 2];
+%         concxline = [concxline, concx];
         plickvals = [plickvals, totmeanlicks];
         hitlinex = [hitlinex, hitx];
         
@@ -140,7 +140,6 @@ else
         figure(2);
         plot(hitx,totmeanlicks,'-or');
         line(hitlinex,plickvals,'Color','blue');
-        set(gca,'XTickLabel',handles.whichEvent.String);
         hold on
         hitx = hitx + 1;
         %
@@ -149,10 +148,10 @@ else
         %   %     set(gca,'ytick',0.4:0.2:0.8);
         %         xlabel('Hit vs. CR');
         %         ylabel('Plick');
-        title('Probability of licking vs choice');
-        
-        ylabel('Plick');
-        set(gca,'xtick',0:2);
+                title('Probability of licking vs choice');
+                set(gca,'XTickLabel',{'Hit' 'CR'});
+                ylabel('Plick');
+                set(gca,
         JL = 1;
         
     end
