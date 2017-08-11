@@ -171,21 +171,3 @@ else
     % caxis([0 1]);
     handles.evTypeNo = userevTypeNo;
 end
-
-
-% set(gca,'xtick',0:6);
-% %     set(gca,'ytick',0.4:0.2:0.8);
-% xlabel('Concentration');
-% ylabel('Plick');
-% title('Probability of licking vs odor conc');
-% % line(concx,totmeanlicks,'Color','blue');
-
-% hFig1 = figure(1);
-% set(hFig1, 'units','normalized','position',[.05 .15 .85 .3])
-% drg_pcolor(repmat(times,szlicks(2),1),repmat(trials',1,length(times)),double(thresholded_licks))
-% colormap jet
-% shading flat
-% xlabel('Time (sec)')
-% ylabel('Trial No');
-% title(['Licks per trial ' handles.drg.session(1).draq_d.eventlabels{handles.evTypeNo}])
-% caxis([0 1]);
