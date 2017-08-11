@@ -77,14 +77,12 @@ if strcmp(handles.drg.draq_d.eventlabels{handles.evTypeNo},'Hi Od1') || strcmp(h
         set(gca,'xtick',0:6);
         %     set(gca,'ytick',0.4:0.2:0.8);
         xlabel('Concentration');
-        ylabel('Plick');
         title('Probability of licking vs odor conc');
     end
 else
     for evTypeNo = [3 9]
         handles.evTypeNo = evTypeNo;
-        
-        
+                
         %Enter trials
         firstTr=1;
         lastTr=handles.drg.session(sessionNo).events(handles.evTypeNo).noTimes;
@@ -129,18 +127,21 @@ else
         
         meanlicks = mean(thresholded_licks,2);
         totmeanlicks = mean(meanlicks);
-        %         hitxline = [1 2];
-        %         concxline = [concxline, concx];
+        if evTypeNo == 3
+            A{1} = 'Hit';
+        elseif evTypeNo == 9
+            A{2} = 'CR';
+        else
+            set(gca,'XTickLabel','evTypeNo unknown');
+        end
+        
         plickvals = [plickvals, totmeanlicks];
         hitlinex = [hitlinex, hitx];
-        
-        
-        %         concxline = [concxline, concx];
-        
+           
         figure(2);
         plot(hitx,totmeanlicks,'-or');
         line(hitlinex,plickvals,'Color','blue');
-        set(gca,'XTickLabel',handles.whichEvent.String);
+%         set(gca,'XTickLabel',handles.whichEvent.String);
         hold on
         hitx = hitx + 1;
         %
@@ -150,24 +151,17 @@ else
         %         xlabel('Hit vs. CR');
         %         ylabel('Plick');
         title('Probability of licking vs choice');
-        
-        ylabel('Plick');
-        set(gca,'xtick',0:2);
+        xlabel('Event');
+%         set(axes1,'XTick',[-1 0 1 2 3],'XTickLabel',{'Hit','CR'});
+%         set(gca,'Xtick',[-1 0 1 2 3]);
+        NumTicks = 2;
+        xlim([0.75 2.25]);
+        xmarks = [0.25, 1];        
+        set(gca,'XTick',linspace(xmarks(1),xmarks(2),NumTicks))        
         JL = 1;
         
     end
-    
-    
-    % line(concx,totmeanlicks,'Color','blue');
-    
-    % hFig1 = figure(1);
-    % set(hFig1, 'units','normalized','position',[.05 .15 .85 .3])
-    % drg_pcolor(repmat(times,szlicks(2),1),repmat(trials',1,length(times)),double(thresholded_licks))
-    % colormap jet
-    % shading flat
-    % xlabel('Time (sec)')
-    % ylabel('Trial No');
-    % title(['Licks per trial ' handles.drg.session(1).draq_d.eventlabels{handles.evTypeNo}])
-    % caxis([0 1]);
+    set(gca,'XTickLabel',A);
+    ylabel('Plick');
     handles.evTypeNo = userevTypeNo;
 end
