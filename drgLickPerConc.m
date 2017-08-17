@@ -1,6 +1,10 @@
 function handles=drgLickPerConc(handles)
 %   Finds the percent lick in the 0.5 to 2.5 sec interval for all OdorOn events
 
+%User must choose:
+%Hit or CR for spm
+%Hi 1 - Lo 6 for spmc
+
 %Enter LFP tetrode and event
 sessionNo=handles.sessionNo;
 lfpElectrode=19; %19 is the lick
