@@ -49,9 +49,9 @@ if which_file==1
         
         if strcmp(this_file(1:3),'jt_')
             %read the jt_times files
-            handles.jtfullName=[handles.drgbchoices.PathName{filNum},handles.drgbchoices.FileName{filNum}];
+            handles.jtfullName=[handles.drgbchoices.PathName,handles.drgbchoices.FileName{filNum}];
             handles.jtFileName=handles.drgbchoices.FileName{filNum};
-            handles.jtPathName=handles.drgbchoices.PathName{filNum};
+            handles.jtPathName=handles.drgbchoices.PathName;
             
             
             drgRead_jt_times(handles.jtPathName,handles.jtFileName);
@@ -90,7 +90,7 @@ if which_file==1
             
         else
             %Read dropc .mat file
-            handles.dropc_hand=drg_dropc_load([handles.drgbchoices.PathName{filNum},handles.drgbchoices.FileName{filNum}]);
+            handles.dropc_hand=drg_dropc_load([handles.drgbchoices.PathName,handles.drgbchoices.FileName{filNum}]);
             
             
             %Compute percent correct in a 20 trial window
