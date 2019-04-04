@@ -152,15 +152,21 @@ for trNo=firstTr:lastTr
         end
     end
 end
+ 
+%Convolve lick_freq using a window
+conv_win=ones(1,handles.window/dt_licks);
+lick_freq=conv(lick_freq,conv_win,'same');
+lick_freq=lick_freq/(no_trials*handles.window);
 
-
-lick_freq=lick_freq/(no_trials*dt_licks);
-lick_freq_per_trial=lick_freq_per_trial/(dt_licks);
+for ii=1:lastTr-firstTr+1
+    lick_freq_per_trial(ii,:)=conv(lick_freq_per_trial(ii,:),conv_win,'same');
+end
+lick_freq_per_trial=lick_freq_per_trial/(dt_licks*handles.window);
 lick_freq_per_trial=lick_freq_per_trial(1:no_trials,:);
 
 CIlickf = bootci(1000, @mean, lick_freq_per_trial);
-CIlickf(1,:)=lick_freq-CIlickf(1,:);
-CIlickf(2,:)=CIlickf(2,:)-lick_freq;
+CIlickf(1,:)=mean(lick_freq_per_trial)-CIlickf(1,:);
+CIlickf(2,:)=CIlickf(2,:)-mean(lick_freq_per_trial);
 
 lick_traces=lick_traces(1:no_trials,1:ceil((handles.time_end-handles.time_start-2*handles.time_pad)*handles.drg.session(sessionNo).draq_p.ActualRate));
 lick_trace_times=([1:ceil((handles.time_end-handles.time_start-2*handles.time_pad)*handles.drg.session(sessionNo).draq_p.ActualRate)]/handles.drg.session(sessionNo).draq_p.ActualRate)+min_t+handles.time_pad;
@@ -171,6 +177,8 @@ these_stamped_lick_times=ones(no_trials,250);
 
 stamped_lick_ii(1,:)=temp_stamped_lick_ii(1,1:no_trials);
 these_stamped_lick_times(:,:)=these_temp_stamped_lick_times(1:no_trials,:);
+
+pffft=1;
 
 
 

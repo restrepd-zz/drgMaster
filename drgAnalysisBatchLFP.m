@@ -23,7 +23,7 @@ function drgAnalysisBatchLFP(handles)
 %    Used for old Fig. 4 of Daniel's paper with acetoethylben_electrode9202017.mat. Analyzed per session
 %
 % 6 For a subset of first files for events 1 and 2 plot the ERP LFP bandwide spectrum,
-%   ERP LFP power histograms for different bandwidths for each electrode and ERP LFP auROCs. 
+%   ERP LFP power histograms for different bandwidths for each electrode and ERP LFP auROCs.
 %   Analyzed per session
 %
 % 7 Generate ERP LFP power auROC. first vs last. . Analyzed per session
@@ -60,18 +60,19 @@ function drgAnalysisBatchLFP(handles)
 %
 % 18 Multiclass ROC analysis for mean angle for PAC for multiple epochs and proficient
 % vs naive
-% 
+%
 % 19 PAC MI analysis for events (concentrations or S+/S-) for naive and proficient
 % Analyzed per mouse for groups defined by the user
 %
 % 20  Multiclass ROC analysis of LFP power differences for naive and proficient
 % mice for different epochs (concentrations or S+ vs. S-) and different groups. Analyzed per mouse
 %
-% 21  Cloned from case 14. Timecourse of delta dB power as function of
-% trial number
-%
-% 22  Multiclass ROC analysis of coherence for naive and proficient
+% 21  Multiclass ROC analysis of coherence for naive and proficient
 %  mice for different epochs (concentrations or S+ vs. S-) and different groups. Analyzed per mouse
+%
+% 22 ERWA analysis for LFP power 
+%
+% 23 Oscillatory power at the peak and trough of the PAC
 
 %% Read the BatchParameters
 [parsFileName,parsPathName] = uigetfile({'drgLFPBatchAnalPars*.m'},'Select the .m file with all the parameters for LFP batch analysis');
@@ -142,11 +143,11 @@ end
 if isfield(handles_pars,'per_lab')
     per_lab=handles_pars.per_lab;
 end
- 
+
 if ~isfield(handles_pars,'no_bandwidths')
     no_bandwidths=4;
     low_freq=[6 15 35 65];
-    high_freq=[12 30 55 95];
+    high_freq=[14 30 55 95];
     freq_names={'Theta','Beta','Low gamma','High gamma'};
 else
     no_bandwidths=handles_pars.no_bandwidths;
@@ -155,9 +156,15 @@ else
     freq_names=handles_pars.freq_names;
 end
 
+if ~isfield(handles_pars,'no_pacii')
+    no_pacii=3;
+else
+    no_pacii=handles_pars.no_pacii;
+end
+
 refWin=handles_pars.refWin;
 
-
+ 
 %% The code processing pairwise batch LFP starts here
 
 close all
@@ -177,11 +184,11 @@ end
 event1=eventType(1);
 event2=eventType(2);
 
- 
+
 %Ask user for the drgb output .mat file and load those data
 [handles.drgb.outFileName,handles.PathName] = uigetfile('*.mat','Select the drgb output file');
 load([handles.PathName handles.drgb.outFileName])
- 
+
 if (~isfield(handles_pars,'files'))||(isempty(handles_pars.files))
     files=[1:handles_drgb.drgbchoices.no_files];
 end
@@ -198,8 +205,10 @@ switch which_display
         
         frequency=handles_drgb.drgb.lfpevpair(1).fERP;
         max_events_per_sec=(handles_drgb.drgbchoices.timeEnd(winNo)-handles_drgb.drgbchoices.timeStart(winNo))*handles_drgb.max_events_per_sec;
-    case 22
+    case 21
         frequency=handles_drgb.drgb.lfpevpair(1).f_coh;
+    case 22
+        frequency=handles_drgb.drgb.lfpevpair(1).wave_fERWA;
     otherwise
         if isfield(handles_drgb.drgb,'freq_for_LFPpower')
             frequency=handles_drgb.drgb.freq_for_LFPpower;
@@ -207,11 +216,13 @@ switch which_display
             frequency=handles_drgb.drgb.file(1).freq_for_LFPpower;
         end
 end
-  
+
 if isfield(handles_drgb.drgb.file,'eventlabels')
-    %Overwrite the event labels
-    for ii=1:length(eventType)
-       evTypeLabels{ii}=handles_drgb.drgb.file(1).eventlabels{handles_drgb.drgbchoices.evTypeNos(eventType(ii))}; 
+    if ~isempty(handles_drgb.drgb.file(1).eventlabels)
+        %Overwrite the event labels
+        for ii=1:length(eventType)
+            evTypeLabels{ii}=handles_drgb.drgb.file(1).eventlabels{handles_drgb.drgbchoices.evTypeNos(eventType(ii))};
+        end
     end
 end
 
@@ -244,7 +255,7 @@ for lfpodNo=1:handles_drgb.drgb.lfpevpair_no
     files_per_lfp(lfpodNo)=handles_drgb.drgb.lfpevpair(lfpodNo).fileNo;
     window_per_lfp(lfpodNo)=handles_drgb.drgb.lfpevpair(lfpodNo).timeWindow;
     switch which_display
-        case {22}
+        case {21}
             elec_pair_No(lfpodNo)=handles_drgb.drgb.lfpevpair(lfpodNo).elec_pair_No;
             elec1(lfpodNo)=handles_drgb.drgb.lfpevpair(lfpodNo).elec1;
             elec2(lfpodNo)=handles_drgb.drgb.lfpevpair(lfpodNo).elec2;
@@ -395,7 +406,7 @@ switch which_display
                                     %Are the delta dB LFP's different?
                                     
                                     %Hit
-                                    p_val(no_dBs,bwii)=ranksum(this_delta_dB_powerpreHit,this_delta_dB_powerpostHit);
+                                    [p_val(no_dBs,bwii), r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerpreHit,this_delta_dB_powerpostHit);
                                     p_vals=[p_vals p_val(no_dBs,bwii)];
                                     groupNopre(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNopost(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -403,7 +414,7 @@ switch which_display
                                     
                                     
                                     %CR
-                                    p_val(no_dBs+1,bwii)=ranksum(this_delta_dB_powerpreCR,this_delta_dB_powerpostCR);
+                                    [p_val(no_dBs+1,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerpreCR,this_delta_dB_powerpostCR);
                                     p_vals=[p_vals p_val(no_dBs+1,bwii)];
                                     groupNopre(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNopost(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -522,7 +533,7 @@ switch which_display
         p_vals_anovan=[];
         pvals_ancova=[];
         pvals_auROCancova=[];
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             
             
             %Do ancova for auROC auROCpre
@@ -590,7 +601,7 @@ switch which_display
         %         p_chi=[];
         %         for evTN1=1:length(eventType)
         %             fprintf(1, ['Significant changes in pairwise LFP power analysis for event: ' evTypeLabels{evTN1} '\n\n'])
-        %             for bwii=1:4
+        %             for bwii=1:no_bandwidths
         %                 for grs=grpre
         %                     num_sig(grs)=sum(p_val((events==evTN1)&(groupNopre==grs),bwii)<=0.05);
         %                     tot_num(grs)=sum((events==evTN1)&(grs==groupNopre));
@@ -613,7 +624,7 @@ switch which_display
         pvals_auROCperm=[];
         
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             n_cum=0;
             this_legend=[];
             data_auROC=[];
@@ -694,7 +705,7 @@ switch which_display
                 %                 mode_statcond='perm';
                 %                 [F df pval_auROCperm] = statcond(a,'mode',mode_statcond,'naccu', 1000); % perform an unpaired ANOVA
                 %
-                pval_auROCperm=ranksum(auROCpre((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)), auROCpost((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)));
+                [pval_auROCperm, r_or_t]=drg_ranksum_or_ttest(auROCpre((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)), auROCpost((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)));
                 
                 if grs==1
                     fprintf(1, ['p value for premuted anovan for auROC DBH Cre x halo pre vs laser ' freq_names{bwii} '= %d\n'],  pval_auROCperm);
@@ -896,7 +907,7 @@ switch which_display
                                     
                                     %Ev1
                                     
-                                    p_val(no_dBs,bwii)=ranksum(this_delta_dB_powerfp1Ev1,this_delta_dB_powerfp2Ev1);
+                                    [p_val(no_dBs,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerfp1Ev1,this_delta_dB_powerfp2Ev1);
                                     p_vals=[p_vals p_val(no_dBs,bwii)];
                                     groupNofp1(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNofp2(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -904,7 +915,7 @@ switch which_display
                                     
                                     
                                     %Ev2
-                                    p_val(no_dBs+1,bwii)=ranksum(this_delta_dB_powerfp1Ev2,this_delta_dB_powerfp2Ev2);
+                                    [p_val(no_dBs+1,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerfp1Ev2,this_delta_dB_powerfp2Ev2);
                                     p_vals=[p_vals p_val(no_dBs+1,bwii)];
                                     groupNofp1(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNofp2(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -1015,7 +1026,7 @@ switch which_display
         
         %Now plot the histograms and the average for LFP power
         num_pv_perm=0;
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             
             
             %Plot the mean and CI for odorant 1 S+ on the left
@@ -1130,7 +1141,7 @@ switch which_display
         
         x=0;
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -1412,7 +1423,7 @@ switch which_display
         set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
         
         %Now plot the histograms and the average
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             %Plot the average
             figure(bwii+1)
             pos2=[0.8 0.1 0.1 0.8];
@@ -1475,7 +1486,7 @@ switch which_display
         p_val_ROC=[];
         edges=-0.5:0.05:0.5;
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -1507,7 +1518,7 @@ switch which_display
         
         hold on
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             bar(bwii,100*sum(( p_valROC<=pFDRauROC)&(ROCbandwidth==bwii))/sum((ROCbandwidth==bwii)))
             auROC_sig.sig(bwii)=sum(( p_valROC<=pFDRauROC)&(ROCbandwidth==bwii));
             auROC_sig.not_sig(bwii)=sum((ROCbandwidth==bwii))-sum(( p_valROC<=pFDRauROC)&(ROCbandwidth==bwii));
@@ -1690,7 +1701,7 @@ switch which_display
                                         
                                         %Ev1
                                         
-                                        p_val(no_dBs,bwii)=ranksum(this_delta_dB_powerfp1Ev1,this_delta_dB_powerfp2Ev1);
+                                        [p_val(no_dBs,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerfp1Ev1,this_delta_dB_powerfp2Ev1);
                                         p_vals=[p_vals p_val(no_dBs,bwii)];
                                         groupNofp1(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                         groupNofp2(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -1698,7 +1709,7 @@ switch which_display
                                         
                                         
                                         %Ev2
-                                        p_val(no_dBs+1,bwii)=ranksum(this_delta_dB_powerfp1Ev2,this_delta_dB_powerfp2Ev2);
+                                        [p_val(no_dBs+1,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerfp1Ev2,this_delta_dB_powerfp2Ev2);
                                         p_vals=[p_vals p_val(no_dBs+1,bwii)];
                                         groupNofp1(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                         groupNofp2(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -1812,7 +1823,7 @@ switch which_display
         hold on
         x=0;
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -2049,7 +2060,7 @@ switch which_display
                                     
                                     %Hit
                                     
-                                    p_val(no_dBs,bwii)=ranksum(this_delta_dB_powerpreHit,this_delta_dB_powerpostHit);
+                                    [p_val(no_dBs,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerpreHit,this_delta_dB_powerpostHit);
                                     p_vals=[p_vals p_val(no_dBs,bwii)];
                                     groupNopre(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNopost(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -2057,7 +2068,7 @@ switch which_display
                                     
                                     
                                     %CR
-                                    p_val(no_dBs+1,bwii)=ranksum(this_delta_dB_powerpreCR,this_delta_dB_powerpostCR);
+                                    [p_val(no_dBs+1,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerpreCR,this_delta_dB_powerpostCR);
                                     p_vals=[p_vals p_val(no_dBs+1,bwii)];
                                     groupNopre(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNopost(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -2177,7 +2188,7 @@ switch which_display
         p_vals_anovan=[];
         pvals_ancova=[];
         pvals_auROCancova=[];
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             
             
             %Do ancova for auROC auROCpre
@@ -2244,7 +2255,7 @@ switch which_display
         %         p_chi=[];
         %         for evTN1=1:length(eventType)
         %             fprintf(1, ['Significant changes in pairwise LFP power analysis for event: ' evTypeLabels{evTN1} '\n\n'])
-        %             for bwii=1:4
+        %             for bwii=1:no_bandwidths
         %                 for grs=grpre
         %                     num_sig(grs)=sum(p_val((events==evTN1)&(groupNopre==grs),bwii)<=0.05);
         %                     tot_num(grs)=sum((events==evTN1)&(grs==groupNopre));
@@ -2267,7 +2278,7 @@ switch which_display
         pvals_auROCperm=[];
         
         x=0
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             n_cum=0;
             this_legend=[];
             data_auROC=[];
@@ -2347,7 +2358,7 @@ switch which_display
                 %                 mode_statcond='perm';
                 %                 [F df pval_auROCperm] = statcond(a,'mode',mode_statcond,'naccu', 1000); % perform an unpaired ANOVA
                 %
-                pval_auROCperm=ranksum(auROCpre((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)), auROCpost((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)));
+                [pval_auROCperm,r_or_t]=drg_ranksum_or_ttest(auROCpre((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)), auROCpost((ROCgroupNopre==grpre(grs))&(ROCbandwidthpre==bwii)));
                 
                 if grs==1
                     fprintf(1, ['p value for premuted anovan for auROC DBH Cre x halo pre vs laser ' freq_names{bwii} '= %d\n'],  pval_auROCperm);
@@ -2611,7 +2622,7 @@ switch which_display
         set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
         
         %Now plot the histograms and the average
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             %Plot the average
             figure(bwii+1)
             pos2=[0.8 0.1 0.1 0.8];
@@ -2674,7 +2685,7 @@ switch which_display
         p_val_ROC=[];
         edges=-0.5:0.05:0.5;
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -2706,7 +2717,7 @@ switch which_display
         
         hold on
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             bar(bwii,100*sum(( p_valROC<=pFDRauROC)&(ROCbandwidth==bwii))/sum((ROCbandwidth==bwii)))
             auROC_sig.sig(bwii)=sum(( p_valROC<=pFDRauROC)&(ROCbandwidth==bwii));
             auROC_sig.not_sig(bwii)=sum((ROCbandwidth==bwii))-sum(( p_valROC<=pFDRauROC)&(ROCbandwidth==bwii));
@@ -2892,7 +2903,7 @@ switch which_display
                                     
                                     %Ev1
                                     
-                                    p_val(no_dBs,bwii)=ranksum(this_delta_dB_powerfp1Ev1,this_delta_dB_powerfp2Ev1);
+                                    [p_val(no_dBs,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerfp1Ev1,this_delta_dB_powerfp2Ev1);
                                     p_vals=[p_vals p_val(no_dBs,bwii)];
                                     groupNofp1(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNofp2(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -2900,7 +2911,7 @@ switch which_display
                                     
                                     
                                     %Ev2
-                                    p_val(no_dBs+1,bwii)=ranksum(this_delta_dB_powerfp1Ev2,this_delta_dB_powerfp2Ev2);
+                                    [p_val(no_dBs+1,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerfp1Ev2,this_delta_dB_powerfp2Ev2);
                                     p_vals=[p_vals p_val(no_dBs+1,bwii)];
                                     groupNofp1(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                     groupNofp2(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -3013,7 +3024,7 @@ switch which_display
         hold on
         x=0;
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -3263,7 +3274,7 @@ switch which_display
                                         %Are the delta dB LFP's different?
                                         
                                         %Hit
-                                        p_val(no_dBs,bwii)=ranksum(this_delta_dB_powerpreHit,this_delta_dB_powerpostHit);
+                                        [p_val(no_dBs,bwii),r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerpreHit,this_delta_dB_powerpostHit);
                                         p_vals=[p_vals p_val(no_dBs,bwii)];
                                         groupNopre(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                         groupNopost(no_dBs)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -3271,7 +3282,7 @@ switch which_display
                                         
                                         
                                         %CR
-                                        p_val(no_dBs+1,bwii)=ranksum(this_delta_dB_powerpreCR,this_delta_dB_powerpostCR);
+                                        [p_val(no_dBs+1,bwii), r_or_t]=drg_ranksum_or_ttest(this_delta_dB_powerpreCR,this_delta_dB_powerpostCR);
                                         p_vals=[p_vals p_val(no_dBs+1,bwii)];
                                         groupNopre(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,1));
                                         groupNopost(no_dBs+1)=handles_drgb.drgbchoices.group_no(file_pairs(fps,2));
@@ -3355,7 +3366,7 @@ switch which_display
             pvals_auROCperm=[];
             
             
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 n_cum=0;
                 this_legend=[];
                 data_auROC=[];
@@ -3417,7 +3428,7 @@ switch which_display
         plot([-0.6 0.6],[0 0],'-','LineWidth',3,'Color',[0.7 0.7 0.7])
         plot([0 0],[-0.25 0.25],'-','LineWidth',3,'Color',[0.7 0.7 0.7])
         delta_time=([0:10]*0.1-0.5);
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             delta_auROC=zeros(1,length(shift_ii));
             delta_auROC=delta_meanauROC(:,1,bwii)-delta_meanauROC(:,2,bwii);
             delta_CIlow=sqrt(CIauROCdeltaLow(:,1,bwii).^2+CIauROCdeltaLow(:,2,bwii).^2);
@@ -3596,7 +3607,7 @@ switch which_display
         hold on
         
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -3843,7 +3854,7 @@ switch which_display
         hold on
         
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -4093,7 +4104,7 @@ switch which_display
         hold on
         x=0;
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             try
                 close(figNo)
@@ -4355,7 +4366,7 @@ switch which_display
                                         for evNo2=evNo1+1:length(eventType)
                                             if (noWB_for_evNo(evNo1)~=-1)&(noWB_for_evNo(evNo2)~=-1)
                                                 
-                                                for bwii=1:4
+                                                for bwii=1:no_bandwidths
                                                     
                                                     %Enter Ev1
                                                     trials_in_event_Ev1=length(theseEvNos(evNo1,bwii).this_delta_dB_powerEv);
@@ -4466,7 +4477,7 @@ switch which_display
         
         
         %Now plot the histograms and the average
-        for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             %Plot the average
             figure(bwii+2)
             
@@ -4525,7 +4536,7 @@ switch which_display
         %Plot percent significant ROC
         
         figNo=0;
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             for pcii=1:szpc(1)
                 no_pairs=0;
                 EvNo1=[];
@@ -4786,7 +4797,7 @@ switch which_display
         figNo=0;
         
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             
             %Plot auROC for proficient and naive
             figNo=figNo+1;
@@ -4934,7 +4945,7 @@ switch which_display
         end
         
         figNo=4;
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             figNo=figNo+1;
             figure(figNo)
             hold on
@@ -4995,7 +5006,7 @@ switch which_display
             for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
                 theseEvNosPerEl=[];
                 for evNo=1:length(eventType)
-                    for bwii=1:4
+                    for bwii=1:no_bandwidths
                         for elec=1:16
                             theseEvNosPerEl(evNo,bwii,elec).noEv=0;
                         end
@@ -5007,14 +5018,14 @@ switch which_display
                         
                         %                         theseEvNos_thisMouse_thisElec=[];
                         %                         for evNo=1:length(eventType)
-                        %                             for bwii=1:4
+                        %                             for bwii=1:no_bandwidths
                         %                                 theseEvNos_thisMouse_thisElec(evNo,bwii).noEv=0;
                         %                             end
                         %                         end
                         
                         theseEvNos=[];
                         for evNo=1:length(eventType)
-                            for bwii=1:4
+                            for bwii=1:no_bandwidths
                                 theseEvNos(evNo,bwii).noEv=0;
                             end
                         end
@@ -5129,7 +5140,7 @@ switch which_display
                             mouse_included(mouseNo)=1;
                             %Calculate per mouse per electrode delta_dB
                             for evNo=1:length(eventType)
-                                for bwii=1:4
+                                for bwii=1:no_bandwidths
                                     delta_dB_No_per_mouse=delta_dB_No_per_mouse+1;
                                     %                                     this_mouse_delta_dB=[];
                                     %                                     this_mouse_delta_dB=theseEvNos_thisMouse_thisElec(evNo,bwii).this_delta_dB_Ev(theseEvNos_thisMouse_thisElec(evNo,bwii).whichMouse==mouseNo);
@@ -5148,7 +5159,7 @@ switch which_display
                             if can_calculate_auroc==1
                                 for evNo1=1:length(eventType)
                                     for evNo2=evNo1+1:length(eventType)
-                                        for bwii=1:4
+                                        for bwii=1:no_bandwidths
                                             
                                             
                                             %Enter Ev1
@@ -5244,7 +5255,7 @@ switch which_display
                         for evNo2=evNo1+1:length(eventType)
                             
                             
-                            for bwii=1:4
+                            for bwii=1:no_bandwidths
                                 
                                 %Enter Ev1
                                 trials_in_event_Ev1=length(theseEvNosPerEl(evNo1,bwii,which_electrodes(1)).this_delta_dB_powerEv);
@@ -5338,7 +5349,7 @@ switch which_display
         %Now plot the delta dB power per session per electrode
         conc_anno_loc = {[0.15 0.15 0.2 0.2], [0.15 0.15 0.2 0.17], [0.15 0.15 0.2 0.14], [0.15 0.15 0.2 0.11], [0.15 0.15 0.2 0.08], [0.15 0.15 0.2 0.05]};
         fig_pos = {[664 550 576 513],[1233 550 576 513],[664 36 576 513],[1233 36 576 513]};
-        for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             %Plot the average
             
             try
@@ -5402,10 +5413,10 @@ switch which_display
             %             p=anovan(data_dB,{spm});
         end
         
-        %Now plot the histograms and the average per mouse LFP power computed per electrode 
+        %Now plot the histograms and the average per mouse LFP power computed per electrode
         conc_anno_loc = {[0.15 0.15 0.2 0.2], [0.15 0.15 0.2 0.17], [0.15 0.15 0.2 0.14], [0.15 0.15 0.2 0.11], [0.15 0.15 0.2 0.08], [0.15 0.15 0.2 0.05]};
         fig_pos = {[664 550 576 513],[1233 550 576 513],[664 36 576 513],[1233 36 576 513]};
-        for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             %Plot the average
             
             try
@@ -5413,7 +5424,7 @@ switch which_display
             catch
             end
             figure(bwii+4)
-         
+            
             
             set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
             hold on
@@ -5423,11 +5434,11 @@ switch which_display
             events=[];
             mice=[];
             electrodes=[];
-                    
+            
             for evNo=1:length(eventType)
                 
                 for per_ii=1:2      %performance bins. blue = naive, red = proficient
-                     
+                    
                     bar_offset=21-evNo*3+(2-per_ii);
                     if per_ii==1
                         bar(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii))),'r','LineWidth', 3)
@@ -5445,7 +5456,7 @@ switch which_display
                     plot(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii))),'ok','LineWidth', 3)
                     CI = bootci(1000, {@mean, delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii))},'type','cper');
                     plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
-                  
+                    
                     annotation('textbox',conc_anno_loc{per_ii},'String',per_lab(per_ii),'Color',these_colors{3-per_ii},'EdgeColor','none');
                     
                     %Save data for anovan
@@ -5471,7 +5482,7 @@ switch which_display
             
             ylabel('Delta power (dB)')
             
-         
+            
             
             
             
@@ -5484,11 +5495,11 @@ switch which_display
             
         end
         
-         %Now plot the histograms and the average per mouse LFP power
-         %computed per mouse
+        %Now plot the histograms and the average per mouse LFP power
+        %computed per mouse
         conc_anno_loc = {[0.15 0.15 0.2 0.2], [0.15 0.15 0.2 0.17], [0.15 0.15 0.2 0.14], [0.15 0.15 0.2 0.11], [0.15 0.15 0.2 0.08], [0.15 0.15 0.2 0.05]};
         fig_pos = {[664 550 576 513],[1233 550 576 513],[664 36 576 513],[1233 36 576 513]};
-        for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             %Plot the average
             
             try
@@ -5496,7 +5507,7 @@ switch which_display
             catch
             end
             figure(bwii+8)
-         
+            
             
             set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
             hold on
@@ -5504,7 +5515,7 @@ switch which_display
             per_mouse_data_delta_dB=[];
             per_mouse_prof_naive=[];
             per_mouse_events=[];
-          
+            
             for evNo=1:length(eventType)
                 
                 for per_ii=1:2      %performance bins. blue = naive, red = proficient
@@ -5529,7 +5540,7 @@ switch which_display
                     %In the future add lines linking the points
                     plot((bar_offset)*ones(1,sum(mouse_included)),each_mouse_average_delta_dB(logical(mouse_included)),'o',...
                         'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
-                     
+                    
                     %Average and CI
                     plot(bar_offset,mean(each_mouse_average_delta_dB(logical(mouse_included))),'ok','LineWidth', 3)
                     if sum(mouse_included)>2
@@ -5566,14 +5577,14 @@ switch which_display
             [p,tbl,stats]=anovan(per_mouse_data_delta_dB,{per_mouse_prof_naive per_mouse_events},'varnames',{'proficient_vs_naive','events'},'display','off');
             fprintf(1, ['p value for anovan delta dB histogram per mouse, electrode avearage for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
             fprintf(1, ['p value for anovan delta dB histogram  per mouse, electrode avearage for events ' freq_names{bwii} '= %d \n\n'],  p(2));
-   
+            
         end
         
         
         %Do auROC calculations per electrode per mouse
         
         %Plot cumulative histos for auROCs within vs between S+ and S-
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             
             
             figNo = get(gcf,'Number')+1;
@@ -5584,7 +5595,7 @@ switch which_display
             figure(figNo)
             
             hold on
-             
+            
             %Naive between
             if length(auROC((ROCper_ii==2)&(ROCbandwidth==bwii)&(ROC_between==1)))>3
                 [f_aic,x_aic] = drg_ecdf(auROC((ROCper_ii==2)&(ROCbandwidth==bwii)&(ROC_between==1)));
@@ -5663,7 +5674,7 @@ switch which_display
             
             %Plot cumulative histos for auROCs within vs between S+ and S- using
             %only ROCs for adjacent concentrations
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 
                 
                 figNo = get(gcf,'Number')+1;
@@ -5739,7 +5750,7 @@ switch which_display
             
             %Plot cumulative histos for auROCs within vs between S+ and S- using
             %only ROCs for concentrations separated by two log steps
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 
                 
                 figNo = get(gcf,'Number')+1;
@@ -5820,7 +5831,7 @@ switch which_display
         no_between2=zeros(2,4);
         no_sig_between2=zeros(2,4);
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             for pcii=1:szpc(1)
                 no_pairs=0;
                 EvNo1=[];
@@ -5946,7 +5957,7 @@ switch which_display
             end
             hFig=figure(figNo);
             
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 subplot(2,2,bwii)
                 hold on
                 %Plot within naive
@@ -5998,16 +6009,16 @@ switch which_display
             end
             hFig=figure(figNo);
             
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 subplot(2,2,bwii)
                 hold on
                 %Plot within naive
-                             bar(1,100*no_sig_within2(2,bwii)/no_within(2,bwii),'b')
+                bar(1,100*no_sig_within2(2,bwii)/no_within(2,bwii),'b')
                 %             bar(2,100*no_sig_within1(2,bwii)/no_within1(2,bwii),'b')
                 %           bar(3,100*no_sig_within2(2,bwii)/no_within2(2,bwii),'b')
                 
                 %Plot within proficient
-                             bar(2,100*no_sig_within2(1,bwii)/no_within(1,bwii),'r')
+                bar(2,100*no_sig_within2(1,bwii)/no_within(1,bwii),'r')
                 %             bar(5,100*no_sig_within1(1,bwii)/no_within1(1,bwii),'r')
                 %           bar(6,100*no_sig_within2(1,bwii)/no_within2(1,bwii),'r')
                 
@@ -6019,18 +6030,18 @@ switch which_display
                 %Plot between proficient
                 %             bar(12,100*no_sig_between(1,bwii)/no_between(1,bwii),'r')
                 %             bar(13,100*no_sig_between1(1,bwii)/no_between1(1,bwii),'r')
-%                 bar(14,100*no_sig_between2(1,bwii)/no_between2(1,bwii),'r')
+                %                 bar(14,100*no_sig_between2(1,bwii)/no_between2(1,bwii),'r')
                 
                 title(['Percent significant auROC ' freq_names{bwii} ])
                 legend('Naive','Proficient')
             end
-           
+            
         end
         
         %Do auROC calulations per mouse (avearge of electrodes)
         
         %Plot cumulative histos for auROCs within vs between S+ and S-
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             
             
             figNo = get(gcf,'Number')+1;
@@ -6041,7 +6052,7 @@ switch which_display
             figure(figNo)
             
             hold on
-             
+            
             %Naive between
             if length(per_mouse_auROC((per_mouse_ROCper_ii==2)&(per_mouse_ROCbandwidth==bwii)&(per_mouse_ROC_between==1)))>3
                 [f_aic,x_aic] = drg_ecdf(per_mouse_auROC((per_mouse_ROCper_ii==2)&(per_mouse_ROCbandwidth==bwii)&(per_mouse_ROC_between==1)));
@@ -6108,7 +6119,7 @@ switch which_display
             
             %Plot cumulative histos for auROCs within vs between S+ and S- using
             %only ROCs for adjacent concentrations
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 
                 
                 figNo = get(gcf,'Number')+1;
@@ -6184,7 +6195,7 @@ switch which_display
             
             %Plot cumulative histos for auROCs within vs between S+ and S- using
             %only ROCs for concentrations separated by two log steps
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 
                 
                 figNo = get(gcf,'Number')+1;
@@ -6264,7 +6275,7 @@ switch which_display
         no_between2=zeros(2,4);
         no_sig_between2=zeros(2,4);
         
-        for bwii=1:4
+        for bwii=1:no_bandwidths
             for pcii=1:szpc(1)
                 no_pairs=0;
                 EvNo1=[];
@@ -6390,7 +6401,7 @@ switch which_display
             end
             hFig=figure(figNo);
             
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 subplot(2,2,bwii)
                 hold on
                 %Plot within naive
@@ -6442,16 +6453,16 @@ switch which_display
             end
             hFig=figure(figNo);
             
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 subplot(2,2,bwii)
                 hold on
                 %Plot within naive
-                             bar(1,100*no_sig_within2(2,bwii)/no_within(2,bwii),'b')
+                bar(1,100*no_sig_within2(2,bwii)/no_within(2,bwii),'b')
                 %             bar(2,100*no_sig_within1(2,bwii)/no_within1(2,bwii),'b')
                 %           bar(3,100*no_sig_within2(2,bwii)/no_within2(2,bwii),'b')
                 
                 %Plot within proficient
-                             bar(2,100*no_sig_within2(1,bwii)/no_within(1,bwii),'r')
+                bar(2,100*no_sig_within2(1,bwii)/no_within(1,bwii),'r')
                 %             bar(5,100*no_sig_within1(1,bwii)/no_within1(1,bwii),'r')
                 %           bar(6,100*no_sig_within2(1,bwii)/no_within2(1,bwii),'r')
                 
@@ -6463,14 +6474,14 @@ switch which_display
                 %Plot between proficient
                 %             bar(12,100*no_sig_between(1,bwii)/no_between(1,bwii),'r')
                 %             bar(13,100*no_sig_between1(1,bwii)/no_between1(1,bwii),'r')
-%                 bar(14,100*no_sig_between2(1,bwii)/no_between2(1,bwii),'r')
+                %                 bar(14,100*no_sig_between2(1,bwii)/no_between2(1,bwii),'r')
                 
                 title(['Percent significant auROC electrode average ' freq_names{bwii} ])
                 legend('Naive','Proficient')
             end
-           
+            
         end
-      
+        
         save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
         
     case 15
@@ -6751,7 +6762,7 @@ switch which_display
         
         xpos=0;
         for perii=1:2
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 %Concentration dependence
                 percent_sig_conc=100*sum(pvc((periis==perii)&(bwiis==bwii))<=0.05)/sum((periis==perii)&(bwiis==bwii));
                 fprintf(1, ['percent significant for dependence of delta dB on concentration for ' freq_names{bwii} ' ' per_lab{perii} '= %d, n= %d\n' ]...
@@ -6798,7 +6809,7 @@ switch which_display
             
             
             
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 subplot(1,4,bwii)
                 hold on
                 for ii=1:7
@@ -7104,7 +7115,7 @@ switch which_display
         
         xpos=0;
         for perii=1:2
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 %Concentration dependence
                 percent_sig_conc=100*sum(pvc((periis==perii)&(bwiis==bwii))<=0.05)/sum((periis==perii)&(bwiis==bwii));
                 fprintf(1, ['percent significant for dependence of delta dB on concentration for ' freq_names{bwii} ' ' per_lab{perii} '= %d, n= %d\n' ]...
@@ -7151,7 +7162,7 @@ switch which_display
             
             
             
-            for bwii=1:4
+            for bwii=1:no_bandwidths
                 subplot(1,4,bwii)
                 hold on
                 for ii=1:7
@@ -7177,12 +7188,12 @@ switch which_display
         
         save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
         
-    
-     case 17
-       %Justin's per mouse analysis for PAC generates plots of MI, vector
-       %length and mean angle vs events and proficent vs naive
-       
-       
+        
+    case 17
+        %Justin's per mouse analysis for PAC generates plots of MI, vector
+        %length and mean angle vs events and proficent vs naive
+        
+        
         mean_MI_No=0;
         mean_MI=[];
         mean_MI_perii=[];
@@ -7199,7 +7210,7 @@ switch which_display
             which_electrodes=[1:16];
         end
         
-       
+        
         szpc=size(percent_windows);
         for per_ii=1:szpc(1)
             
@@ -7211,11 +7222,11 @@ switch which_display
                         
                         theseEvNos_thisMouse_thisElec=[];
                         for evNo=1:length(eventType)
-                            for pacii=1:3
+                            for pacii=1:no_pacii
                                 theseEvNos_thisMouse_thisElec(evNo,pacii).noEv=0;
                             end
                         end
-                         
+                        
                         for fileNo=1:no_files
                             %If this file is in the list of files the user wants to process in drgAnalysisBatchLFP continue
                             if sum(files==fileNo)>0
@@ -7243,7 +7254,7 @@ switch which_display
                                                     if (sum(trials_in_event_Ev)>=1)
                                                         
                                                         %Do per bandwidth analysis
-                                                        for pacii=1:3
+                                                        for pacii=1:no_pacii
                                                             
                                                             %Enter the modulation index
                                                             this_MI_Ev=zeros(sum(trials_in_event_Ev),1);
@@ -7314,11 +7325,11 @@ switch which_display
                                 end %if mouseNo
                             end
                         end %fileNo
-       
+                        
                         
                         %Calculate per mouse PAC measures
                         for evNo=1:length(eventType)
-                            for pacii=1:3
+                            for pacii=1:no_pacii
                                 
                                 if theseEvNos_thisMouse_thisElec(evNo,pacii).noEv>0
                                     %Calculate per mouse MI
@@ -7341,12 +7352,12 @@ switch which_display
                                     %Calculate per mouse meanVectorAngle
                                     this_mouse_meanVectorAngle=[];
                                     this_mouse_meanVectorAngle=theseEvNos_thisMouse_thisElec(evNo,pacii).this_meanVectorAngle_Ev(theseEvNos_thisMouse_thisElec(evNo,pacii).whichMouse==mouseNo);
-                                    mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_mean(this_mouse_meanVectorAngle'*pi/180)';
+                                    mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_axial(circ_mean(this_mouse_meanVectorAngle'*pi/180)');
                                     
                                     %Calculate per mouse peakAngle
                                     this_mouse_peakAngle=[];
                                     this_mouse_peakAngle=theseEvNos_thisMouse_thisElec(evNo,pacii).this_peakAngle_Ev(theseEvNos_thisMouse_thisElec(evNo,pacii).whichMouse==mouseNo);
-                                    mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_mean(this_mouse_peakAngle'*pi/180)';
+                                    mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_axial(circ_mean(this_mouse_peakAngle'*pi/180)');
                                 end
                             end
                         end
@@ -7364,7 +7375,7 @@ switch which_display
         %Now plot the average MI per electrode per session (file)
         conc_anno_loc = {[0.15 0.6 0.2 0.2], [0.15 0.6 0.2 0.17], [0.15 0.6 0.2 0.14], [0.15 0.6 0.2 0.11], [0.15 0.6 0.2 0.08], [0.15 0.6 0.2 0.05]};
         fig_pos = {[664 550 576 513],[1233 550 576 513],[664 36 576 513],[1233 36 576 513]};
-        for pacii=1:3    %for amplitude bandwidths (beta, low gamma, high gamma)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
             
             data_MI=[];
             prof_naive=[];
@@ -7431,7 +7442,7 @@ switch which_display
         %Now plot the average MI per electrode per mouse
         conc_anno_loc = {[0.15 0.6 0.2 0.2], [0.15 0.6 0.2 0.17], [0.15 0.6 0.2 0.14], [0.15 0.6 0.2 0.11], [0.15 0.6 0.2 0.08], [0.15 0.6 0.2 0.05]};
         fig_pos = {[664 550 576 513],[1233 550 576 513],[664 36 576 513],[1233 36 576 513]};
-        for pacii=1:3    %for amplitude bandwidths (beta, low gamma, high gamma)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
             
             data_MI=[];
             prof_naive=[];
@@ -7499,7 +7510,7 @@ switch which_display
         
         %Now plot the cumulative histogram for MI per electrode per mouse
         
-        for pacii=1:3    %for amplitude bandwidths (beta, low gamma, high gamma)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
             
             data_MI=[];
             prof_naive=[];
@@ -7562,7 +7573,7 @@ switch which_display
         %Plot the meanVectorAngle
         min_MI=0.000;
         
-        for pacii=1:3    %for amplitude bandwidths (beta, low gamma, high gamma)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
             
             data_meanVectorAngle=[];
             prof_naive=[];
@@ -7682,7 +7693,7 @@ switch which_display
                 per_ii=2;
                 circ_meanVA=[];
                 CI=zeros(1,2);
-                circ_meanVA=180*circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180)/pi;
+                circ_meanVA=180*circ_axial(circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180))/pi;
                 CI(1,1:2) = 180*bootci(1000, {@circ_mean, pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180},'type','cper')/pi;
                 plot([1],circ_meanVA,'o','MarkerEdgeColor','b','MarkerFaceColor','b');
                 plot([1 1],CI,'-b','LineWidth',3);
@@ -7691,7 +7702,7 @@ switch which_display
                 per_ii=1;
                 circ_meanVA=[];
                 CI=zeros(1,2);
-                circ_meanVA=180*circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180)/pi;
+                circ_meanVA=180*circ_axial(circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180))/pi;
                 CI(1,1:2) = 180*bootci(1000, {@circ_mean, pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180},'type','cper')/pi;
                 plot([2],circ_meanVA,'o','MarkerEdgeColor','r','MarkerFaceColor','r');
                 plot([2 2],CI,'-r','LineWidth',3);
@@ -7701,7 +7712,7 @@ switch which_display
                 per_ii=2;
                 circ_meanVA=[];
                 CI=zeros(1,2);
-                circ_meanVA=180*circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180)/pi;
+                circ_meanVA=180*circ_axial(circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180))/pi;
                 CI(1,1:2) = 180*bootci(1000, {@circ_mean, pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180},'type','cper')/pi;
                 plot([4],circ_meanVA,'o','MarkerEdgeColor','b','MarkerFaceColor','b');
                 plot([4 4],CI,'-b','LineWidth',3);
@@ -7710,7 +7721,7 @@ switch which_display
                 per_ii=1;
                 circ_meanVA=[];
                 CI=zeros(1,2);
-                circ_meanVA=180*circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180)/pi;
+                circ_meanVA=180*circ_axial(circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180))/pi;
                 CI(1,1:2) = 180*bootci(1000, {@circ_mean, pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180},'type','cper')/pi;
                 plot([5],circ_meanVA,'o','MarkerEdgeColor','r','MarkerFaceColor','r');
                 plot([5 5],CI,'-r','LineWidth',3);
@@ -7726,8 +7737,8 @@ switch which_display
             
             for per_ii=2:-1:1
                 for evNo=1:length(eventType)
-                    circ_meanVA(evNo)=180*circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180)/pi;
-                    CI(1:2,evNo) = 180*bootci(1000, {@circ_mean, pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180},'type','cper')/pi;
+                    circ_meanVA(evNo)=180*circ_axial(circ_mean(pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180))/pi;
+                    CI(1:2,evNo) = 180*circ_axial(bootci(1000, {@circ_mean, pi*mean_meanVectorAngle_per_mouse((mean_MI_per_mouse>min_MI)&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))'/180},'type','cper'))/pi;
                     
                     %Save data for anovan
                     data_meanVectorAngle=[data_meanVectorAngle mean_meanVectorAngle_per_mouse((mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo))];
@@ -7793,7 +7804,7 @@ switch which_display
                         
                         theseEvNos_thisMouse_thisElec=[];
                         for evNo=1:length(eventType)
-                            for pacii=1:3
+                            for pacii=1:no_pacii
                                 theseEvNos_thisMouse_thisElec(evNo,pacii).noEv=0;
                             end
                         end
@@ -7824,7 +7835,7 @@ switch which_display
                                                     if (sum(trials_in_event_Ev)>=1)
                                                         
                                                         %Do per bandwidth analysis
-                                                        for pacii=1:3
+                                                        for pacii=1:no_pacii
                                                             
                                                             %Enter the modulation index
                                                             this_MI_Ev=zeros(sum(trials_in_event_Ev),1);
@@ -7904,7 +7915,7 @@ switch which_display
                             for evNo2=evNo1+1:length(eventType)
                                 
                                 
-                                for pacii=1:3
+                                for pacii=1:no_pacii
                                     if (theseEvNos_thisMouse_thisElec(evNo1,pacii).noEv>5)&(theseEvNos_thisMouse_thisElec(evNo2,pacii).noEv>5)
                                         %Enter Ev1
                                         trials_in_event_Ev1=theseEvNos_thisMouse_thisElec(evNo1,pacii).noEv;
@@ -7925,7 +7936,7 @@ switch which_display
                                         %In the future write a ROC that
                                         %goes around the circle using
                                         %parfor
-                                        this_mean_angle=(180/pi)*circ_mean([this_meanAngle_Ev1' this_meanAngle_Ev2']'*pi/180)';
+                                        this_mean_angle=(180/pi)*circ_axial(circ_mean([this_meanAngle_Ev1' this_meanAngle_Ev2']'*pi/180)');
                                         
                                         if this_mean_angle<180
                                             this_mean_angle=this_mean_angle+180;
@@ -7977,7 +7988,7 @@ switch which_display
                         if theseEvNos_thisMouse_thisElec(evNo,pacii).noEv>0
                             %Calculate per mouse PAC measures
                             for evNo=1:length(eventType)
-                                for pacii=1:3
+                                for pacii=1:no_pacii
                                     
                                     %Calculate per mouse MI
                                     mean_MI_No_per_mouse=mean_MI_No_per_mouse+1;
@@ -8002,7 +8013,7 @@ switch which_display
                                     if isempty(this_mouse_meanVectorAngle)
                                         mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=NaN;
                                     else
-                                        mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_mean(this_mouse_meanVectorAngle'*pi/180)';
+                                        mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_axial(circ_mean(this_mouse_meanVectorAngle'*pi/180)');
                                     end
                                     
                                     %Calculate per mouse peakAngle
@@ -8011,7 +8022,7 @@ switch which_display
                                     if isempty(this_mouse_peakAngle)
                                         mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=NaN;
                                     else
-                                        mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_mean(this_mouse_peakAngle'*pi/180)';
+                                        mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_axial(circ_mean(this_mouse_peakAngle'*pi/180)');
                                     end
                                     
                                 end
@@ -8034,7 +8045,7 @@ switch which_display
         %Plot cumulative histos for auROCs within vs between S+ and S-
         %Using all epochs
         figNo = get(gcf,'Number');
-        for pacii=1:3
+        for pacii=1:no_pacii
             
             
             
@@ -8115,7 +8126,7 @@ switch which_display
             
             %Plot cumulative histos for auROCs within vs between S+ and S- using
             %only ROCs for adjacent concentrations
-            for pacii=1:3
+            for pacii=1:no_pacii
                 
                 
                 
@@ -8191,7 +8202,7 @@ switch which_display
             
             %Plot cumulative histos for auROCs within vs between S+ and S- using
             %only ROCs for concentrations separated by two log steps
-            for pacii=1:3
+            for pacii=1:no_pacii
                 
                 
                 
@@ -8271,7 +8282,7 @@ switch which_display
         no_between2=zeros(2,4);
         no_sig_between2=zeros(2,4);
         
-        for pacii=1:3
+        for pacii=1:no_pacii
             for pcii=1:szpc(1)
                 no_pairs=0;
                 EvNo1=[];
@@ -8401,7 +8412,7 @@ switch which_display
             hFig=figure(figNo);
             figNo = figNo+1;
             
-            for pacii=1:3
+            for pacii=1:no_pacii
                 subplot(2,2,pacii)
                 hold on
                 %Plot within naive
@@ -8455,7 +8466,7 @@ switch which_display
             hFig=figure(figNo);
             figNo = figNo+1;
             
-            for pacii=1:3
+            for pacii=1:no_pacii
                 subplot(2,2,pacii)
                 hold on
                 %Plot within naive
@@ -8484,7 +8495,8 @@ switch which_display
             
         end
         
-        save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
+        pffft=1;
+        %         save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
         
     case 19
         % 19 PAC MI analysis for events (concentrations or S+/S-) for naive and proficient
@@ -8525,7 +8537,7 @@ switch which_display
                         
                         theseEvNos_thisMouse_thisElec=[];
                         for evNo=1:length(eventType)
-                            for pacii=1:3
+                            for pacii=1:no_pacii
                                 for group_no=1:max(handles_drgb.drgbchoices.group_no)
                                     theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv=0;
                                 end
@@ -8545,8 +8557,8 @@ switch which_display
                                         if (~isempty(handles_drgb.drgb.lfpevpair(lfpodNo).PAC))
                                             
                                             percent_mask=[];
-                                            percent_mask=(handles_drgb.drgb.lfpevpair(lfpodNo).perCorrLFPPower>=percent_windows(per_ii,1))...
-                                                &(handles_drgb.drgb.lfpevpair(lfpodNo).perCorrLFPPower<=percent_windows(per_ii,2));
+                                            percent_mask=logical((handles_drgb.drgb.lfpevpair(lfpodNo).PAC(1).perCorrPAC>=percent_windows(per_ii,1))...
+                                                &(handles_drgb.drgb.lfpevpair(lfpodNo).PAC(1).perCorrPAC<=percent_windows(per_ii,2)));
                                             
                                             if ~isempty(percent_mask)
                                                 
@@ -8556,12 +8568,12 @@ switch which_display
                                                     noWB_for_evNo(evNo)=-1;
                                                     
                                                     trials_in_event_Ev=[];
-                                                    trials_in_event_Ev=(handles_drgb.drgb.lfpevpair(lfpodNo).which_eventLFPPower(eventType(evNo),:)==1)&percent_mask;
+                                                    trials_in_event_Ev=logical((handles_drgb.drgb.lfpevpair(lfpodNo).PAC(1).which_eventPAC(eventType(evNo),:)==1)&percent_mask);
                                                     
                                                     if (sum(trials_in_event_Ev)>=1)
                                                         
                                                         %Do per bandwidth analysis
-                                                        for pacii=1:3
+                                                        for pacii=1:no_pacii
                                                             
                                                             group_no=handles_drgb.drgbchoices.group_no(fileNo);
                                                             
@@ -8583,9 +8595,9 @@ switch which_display
                                                             per_session_group_no(mean_MI_No)=handles_drgb.drgbchoices.group_no(fileNo);
                                                             
                                                             
-                                                            if mean_MI(mean_MI_No)>=0.035
-                                                                fprintf(1, ['MI larger than 0.035 for mouse no %d, file no %d, electrode, %d, pac no %d, perii %d, conc, %d\n'],mouseNo, fileNo, elec, pacii, per_ii, evNo);
-                                                            end
+%                                                             if mean_MI(mean_MI_No)>=0.035
+%                                                                 fprintf(1, ['MI larger than 0.035 for mouse no %d, file no %d, electrode, %d, pac no %d, perii %d, conc, %d\n'],mouseNo, fileNo, elec, pacii, per_ii, evNo);
+%                                                             end
                                                             
                                                             %Enter the meanVectorLength
                                                             this_meanVectorLength_Ev=zeros(sum(trials_in_event_Ev),1);
@@ -8654,7 +8666,7 @@ switch which_display
                             
                             %Calculate per mouse PAC measures
                             for evNo=1:length(eventType)
-                                for pacii=1:3
+                                for pacii=1:no_pacii
                                     for group_no=1:max(handles_drgb.drgbchoices.group_no)
                                         %Calculate per mouse MI
                                         mean_MI_No_per_mouse=mean_MI_No_per_mouse+1;
@@ -8662,6 +8674,9 @@ switch which_display
                                         this_mouse_MI=theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).this_MI_Ev;
                                         if ~isempty(this_mouse_MI)
                                             mean_MI_per_mouse(mean_MI_No_per_mouse)=mean(this_mouse_MI);
+                                            if mean(this_mouse_MI)>0.01
+                                                fprintf(1, ['MI larger than 0.01 for mouse no %d, electrode, %d, pac no %d, perii %d, conc, %d\n'],mouseNo, elec, pacii, per_ii, evNo);
+                                            end
                                         else
                                             mean_MI_per_mouse(mean_MI_No_per_mouse)=NaN;
                                         end
@@ -8686,7 +8701,7 @@ switch which_display
                                         this_mouse_meanVectorAngle=[];
                                         this_mouse_meanVectorAngle=theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).this_meanVectorAngle_Ev;
                                         if ~isempty(this_mouse_meanVectorAngle)
-                                            mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_mean(this_mouse_meanVectorAngle'*pi/180)';
+                                            mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_axial(circ_mean(this_mouse_meanVectorAngle'*pi/180)');
                                         else
                                             mean_meanVectorAngle_per_mouse(mean_MI_No_per_mouse)=NaN;
                                         end
@@ -8695,7 +8710,7 @@ switch which_display
                                         this_mouse_peakAngle=[];
                                         this_mouse_peakAngle=theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).this_peakAngle_Ev;
                                         if ~isempty(this_mouse_peakAngle)
-                                            mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_mean(this_mouse_peakAngle'*pi/180)';
+                                            mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=(180/pi)*circ_axial(circ_mean(this_mouse_peakAngle'*pi/180)');
                                         else
                                             mean_peakAngle_per_mouse(mean_MI_No_per_mouse)=NaN;
                                         end
@@ -8720,126 +8735,9 @@ switch which_display
         fprintf(1, '\n\n')
         
         
-        %Now plot the average MI per electrode per session (file)
-        for pacii=1:3    %for amplitude bandwidths (beta, low gamma, high gamma)
-            
-            data_MI=[];
-            prof_naive=[];
-            events=[];
-            groups=[];
-            
-            %Plot the average
-            try
-                close(pacii)
-            catch
-            end
-            hFig=figure(pacii);
-            
-            set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
-            hold on
-            
-            bar_lab_loc=[];
-            no_ev_labels=0;
-            ii_gr_included=0;
-            
-            for grNo=1:max(handles_drgb.drgbchoices.group_no)
-                
-                include_group=0;
-                
-                for evNo=1:length(eventType)
-                    for per_ii=1:2
-                        
-                        
-                        if sum(eventType==3)>0
-                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(2-evNo);
-                        else
-                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
-                        end
-                        
-                        these_offsets(per_ii)=bar_offset;
-                        
-                        if sum((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))>0
-                            
-                            include_group=1;
-                            
-                            
-                            if per_ii==1
-                                bar(bar_offset,mean(mean_MI((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))),'r','LineWidth', 3,'EdgeColor','none')
-                            else
-                                bar(bar_offset,mean(mean_MI((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))),'b','LineWidth', 3,'EdgeColor','none')
-                            end
-                            
-                            plot(bar_offset,mean(mean_MI((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))),'ok','LineWidth', 3)
-                            plot((bar_offset)*ones(1,sum((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))),mean_MI((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo)),'o',...
-                                'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7],'MarkerSize',3)
-                            if sum((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))>=2
-                                CI = bootci(1000, {@mean, mean_MI((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))},'type','cper');
-                                plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
-                            end
-                            
-                            %Save data for anovan
-                            data_MI=[data_MI mean_MI((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo))];
-                            prof_naive=[prof_naive per_ii*ones(1,sum((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo)))];
-                            events=[events evNo*ones(1,sum((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo)))];
-                            groups=[groups grNo*ones(1,sum((mean_MI_perii==per_ii)&(mean_MI_pacii==pacii)&(mean_MI_evNo==evNo)&(per_session_group_no==grNo)))];
-                        end
-                    end
-                    
-                    if include_group==1
-                        bar_lab_loc=[bar_lab_loc mean(these_offsets)];
-                        no_ev_labels=no_ev_labels+1;
-                        if sum(eventType==3)>0
-                            bar_labels{no_ev_labels}=evTypeLabels{evNo};
-                        else
-                            bar_labels{no_ev_labels}=num2str(concs(evNo));
-                        end
-                    end
-                end
-                if include_group==1
-                    ii_gr_included=ii_gr_included+1;
-                    groups_included(ii_gr_included)=grNo;
-                end
-            end
-            
-            title(['Average MI per electrode per session for PAC theta/' freq_names{pacii+1}])
-            
-            %Annotations
-            x_interval=0.8/ii_gr_included;
-            for ii=1:ii_gr_included
-                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.7 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
-            end
-            
-            %Proficient/Naive annotations
-            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
-            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
-            
-            %x labels
-            to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
-            sorted_A=sortrows(to_sort);
-            sorted_bar_lab_loc=sorted_A(:,1);
-            for ii=1:length(bar_lab_loc)
-                sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
-            end
-            xticks(sorted_bar_lab_loc)
-            xticklabels(sorted_bar_labels)
-            
-            if sum(eventType==3)==0
-                xlabel('Concentration (%)')
-            end
-            
-            ylabel('Modulation Index')
-            
-            %We are not using per session; this does not have mouse as a
-            %random factor
-            %             %Calculate anovan for inteaction
-            %             [p,tbl,stats]=anovan(data_MI,{prof_naive events groups},'varnames',{'proficient_vs_naive','within_vs_between','groups'},'display','off');
-            %             fprintf(1, ['p value for anovan MI per session per electrode for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
-            %             fprintf(1, ['p value for anovan MI per session per electrode for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
-            %             fprintf(1, ['p value for anovan MI per session per electrode for groups for PAC theta/' freq_names{pacii+1} '= %d \n\n'],  p(3));
-        end
-        
-        %Now plot the average MI per electrode per mouse
-        for pacii=1:3    %for amplitude bandwidths (beta, low gamma, high gamma)
+        %Now plot the average MI for each electrode calculated per mouse
+        %(including all sessions for each mouse)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
             
             data_MI=[];
             prof_naive=[];
@@ -8849,10 +8747,10 @@ switch which_display
             
             %Plot the average
             try
-                close(pacii+3)
+                close(pacii)
             catch
             end
-            hFig=figure(pacii+3);
+            hFig=figure(pacii);
             
             set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
             hold on
@@ -8904,7 +8802,7 @@ switch which_display
                             events=[events evNo*ones(1,sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)))];
                             groups=[groups grNo*ones(1,sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)))];
                             mice=[mice mean_MI_mouseNo_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))];
-                             
+                            
                         end
                     end
                     if include_group==1
@@ -8923,9 +8821,9 @@ switch which_display
                 end
             end
             
-            title(['Average MI per electrode per mouse for PAC theta/' freq_names{pacii+1}])
+            title(['Average MI for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1}])
             
-             
+            
             %Annotations identifying groups
             x_interval=0.8/ii_gr_included;
             for ii=1:ii_gr_included
@@ -8954,14 +8852,14 @@ switch which_display
             
             
             %Calculate anovan for inteaction
-            fprintf(1, ['ANOVAN for MI per mouse per electrode with mouse as random factor PAC theta/' freq_names{pacii+1} '\n'])
+            fprintf(1, ['ANOVAN for average MI for each electrode calculated per mouse with mouse as random factor PAC theta/' freq_names{pacii+1} '\n'])
             [p,tbl,stats]=anovan(data_MI,{prof_naive, events, groups, mice},'varnames',{'proficient_vs_naive','events','groups','mice'},'display','off','random',4);
             fprintf(1, ['p value for anovan MI per mouse per electrode for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
             fprintf(1, ['p value for anovan MI per mouse per electrode for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
             fprintf(1, ['p value for anovan MI per mouse per electrode for groups for PAC theta/' freq_names{pacii+1} '= %d \n\n'],  p(3));
             
             %Calculate anovan for inteaction
-            fprintf(1, ['ANOVAN for MI per mouse per electrode without mouse as a factor for PAC theta/' freq_names{pacii+1} '\n'])
+            fprintf(1, ['ANOVAN for average MI for each electrode calculated per mouse without mouse as a factor for PAC theta/' freq_names{pacii+1} '\n'])
             [p,tbl,stats]=anovan(data_MI,{prof_naive, events, groups},'varnames',{'proficient_vs_naive','events','groups'},'display','off');
             fprintf(1, ['p value for anovan MI per mouse per electrode for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
             fprintf(1, ['p value for anovan MI per mouse per electrode for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
@@ -8969,9 +8867,121 @@ switch which_display
             
         end
         
+        %Now do the cumulative histograms and ranksums for MI for each electrode calculated with all sessons per mouse
+        pvals=[];
+        legends=[];
+        for pacii=1:no_pacii
+            
+            ii_rank=0;
+            mi_rank=[];
+            maxmi=-200;
+            minmi=200;
+            
+            try
+                close(pacii+3)
+            catch
+            end
+            hFig=figure(pacii+3);
+            
+            if length(eventType)>2
+                set(hFig, 'units','normalized','position',[.1 .1 .7 .8])
+            else
+                set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            end
+            
+            
+            for evNo=1:length(eventType)
+                
+                subplot(ceil(length(eventType)/2),2,evNo)
+                hold on
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))>1
+                            
+                            [f_mi,x_mi] = drg_ecdf(mean_MI_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)));
+                            cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_mi=f_mi;
+                            cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_mi=x_mi;
+                            if grNo==1
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p1=plot(x_mi,f_mi,'Color',[1 0 0],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p2=plot(x_mi,f_mi,'Color',[0 0 1],'LineWidth',3);
+                                end
+                            else
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p3=plot(x_mi,f_mi,'Color',[1 0.7 0.7],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p4=plot(x_mi,f_mi,'Color',[0.7 0.7 1],'LineWidth',3);
+                                end
+                            end
+                            
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            mi_rank(ii_rank).mi=mean_MI_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo));
+                            mi_rank(ii_rank).per_ii=per_ii;
+                            mi_rank(ii_rank).grNo=grNo;
+                            mi_rank(ii_rank).evNo=evNo;
+                            maxmi=max([maxmi max(mean_MI_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)))]);
+                            minmi=min([minmi min(mean_MI_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)))]);
+                        end
+                    end
+                    
+                end
+                
+                title(evTypeLabels{evNo})
+                xlabel('MI')
+                ylabel('Probability')
+            end
+            
+            
+            
+            for evNo=1:length(eventType)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                xlim([minmi-0.1*(maxmi-minmi) maxmi+0.1*(maxmi-minmi)])
+            end
+            
+            %suptitle(['Average MI for each electrode calculated per  for PAC theta/' freq_names{pacii+1}])
+            
+            %Now do the ranksums
+            fprintf(1, ['Ranksum or t-test p values for average MI for each electrode calculated per mouse for PAC theta' freq_names{pacii+1} '\n'])
+            prof_naive_leg{1}='Proficient';
+            prof_naive_leg{2}='Naive';
+            
+            input_data=[];
+            for ii=1:ii_rank
+                input_data(ii).data=mi_rank(ii).mi;
+                input_data(ii).description=[handles_drgb.drgbchoices.group_no_names{mi_rank(ii).grNo} ' ' evTypeLabels{mi_rank(ii).evNo} ' ' prof_naive_leg{mi_rank(ii).per_ii}];
+            end
+            [output_data] = drgMutiRanksumorTtest(input_data);
+            
+%             for ii=1:ii_rank
+%                 for jj=ii+1:ii_rank
+%                     [p, r_or_t]=drg_ranksum_or_ttest(mi_rank(ii).mi,mi_rank(jj).mi);
+%                     if r_or_t==0
+%                         fprintf(1, ['p value ranksum for ' handles_drgb.drgbchoices.group_no_names{mi_rank(ii).grNo} ' ' evTypeLabels{mi_rank(ii).evNo} ' ' prof_naive_leg{mi_rank(ii).per_ii} ' vs ' ...
+%                             handles_drgb.drgbchoices.group_no_names{mi_rank(jj).grNo} ' ' evTypeLabels{mi_rank(jj).evNo} ' ' prof_naive_leg{mi_rank(jj).per_ii} ' =  %d\n'],p)
+%                     else
+%                         fprintf(1, ['p value t-test for ' handles_drgb.drgbchoices.group_no_names{mi_rank(ii).grNo} ' ' evTypeLabels{mi_rank(ii).evNo} ' ' prof_naive_leg{mi_rank(ii).per_ii} ' vs ' ...
+%                             handles_drgb.drgbchoices.group_no_names{mi_rank(jj).grNo} ' ' evTypeLabels{mi_rank(jj).evNo} ' ' prof_naive_leg{mi_rank(jj).per_ii} ' =  %d\n'],p)
+%                     end
+%                     pvals=[pvals p];
+%                 end
+%             end
+%             fprintf(1, ['\n\n'])
+        end
+%         
+%         pFDR_mi_rank=drsFDRpval( pvals);
+%         fprintf(1, ['pFDR for per mi per mouse, per electrode  = %d\n\n'],pFDR_mi_rank);
         
         %Now plot the average MI per mouse averaged over electrodes
-        for pacii=1:3    %for amplitude bandwidths (beta, low gamma, high gamma)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
             
             data_MI_per_mouse=[];
             prof_naive_per_mouse=[];
@@ -8988,7 +8998,7 @@ switch which_display
             set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
             hold on
             
-            bar_lab_loc=[];
+            %             bar_lab_loc=[];
             no_ev_labels=0;
             ii_gr_included=0;
             
@@ -9045,6 +9055,47 @@ switch which_display
                                     plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
                                 end
                                 
+                                %Show the mean in the cumulative histos
+                                figure(pacii+3)
+                                subplot(ceil(length(eventType)/2),2,evNo)
+                                hold on
+                                
+                                
+                                for jj=1:length(each_mouse_average_MI)
+                                    this_f_mi=[];
+                                    this_f_mi=cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_mi;
+                                    
+                                    this_x_mi=[];
+                                    this_x_mi=cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_mi;
+                                    
+                                    xii_below=find(this_x_mi<each_mouse_average_MI(jj),1,'last');
+                                    xii_above=find(this_x_mi>each_mouse_average_MI(jj),1,'first');
+                                    
+                                    slope=(this_f_mi(xii_above)-this_f_mi(xii_below))/(this_x_mi(xii_above)-this_x_mi(xii_below));
+                                    intercept=this_f_mi(xii_above)-slope*this_x_mi(xii_above);
+                                    
+                                    this_f=slope*each_mouse_average_MI(jj)+intercept;
+                                    
+                                    if grNo==1
+                                        if per_ii==1
+                                            plot(each_mouse_average_MI(jj),this_f,'o','MarkerFace',[1 0 0],'MarkerEdge',[1 0 0],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_MI(jj),this_f,'o','MarkerFace',[0 0 1],'MarkerEdge',[0 0 1],'MarkerSize',10)
+                                        end
+                                    else
+                                        if per_ii==1
+                                            plot(each_mouse_average_MI(jj),this_f,'o','MarkerFace',[1 0.7 0.7],'MarkerEdge',[1 0.7 0.7],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_MI(jj),this_f,'o','MarkerFace',[0.7 0.7 1],'MarkerEdge',[0.7 0.7 1],'MarkerSize',10)
+                                        end
+                                    end
+                                    
+                                end
+                                
+                                
+                                figure(pacii+6)
+                                hold on
+                                
                                 %Save data for anovan
                                 data_MI_per_mouse=[data_MI_per_mouse mean_MI_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))];
                                 prof_naive_per_mouse=[prof_naive_per_mouse per_ii*ones(1,sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)))];
@@ -9054,13 +9105,15 @@ switch which_display
                         end
                     end
                 end
+                
+                
                 if include_group==1
                     ii_gr_included=ii_gr_included+1;
                     groups_included(ii_gr_included)=grNo;
                 end
             end
             
-            title(['Average MI per mouse averaged over electrodes for PAC theta/' freq_names{pacii+1}])
+            title(['Average MI per mouse averaged over all electrodes for PAC theta/' freq_names{pacii+1}])
             
             
             %Annotations identifying groups
@@ -9073,13 +9126,13 @@ switch which_display
             annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
             annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
             
-            %x labels
-            to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
-            sorted_A=sortrows(to_sort);
-            sorted_bar_lab_loc=sorted_A(:,1);
-            for ii=1:length(bar_lab_loc)
-                sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
-            end
+            %             %x labels
+            %             to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+            %             sorted_A=sortrows(to_sort);
+            %             sorted_bar_lab_loc=sorted_A(:,1);
+            %             for ii=1:length(bar_lab_loc)
+            %                 sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+            %             end
             xticks(sorted_bar_lab_loc)
             xticklabels(sorted_bar_labels)
             
@@ -9090,21 +9143,771 @@ switch which_display
             ylabel('Modulation Index')
             
             %Calculate anovan for inteaction
-            [p,tbl,stats]=anovan(data_MI,{prof_naive_per_mouse events_per_mouse, groups_per_mouse},'model','interaction','varnames',{'proficient_vs_naive','events','groups'},'display','off');
-            fprintf(1, ['p value for anovan MI per mouse averaged over electrodes for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
-            fprintf(1, ['p value for anovan MI per mouse averaged over electrodes for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
-            fprintf(1, ['p value for anovan MI per mouse averaged over electrodes for groups for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(3));
-            fprintf(1, ['p value for anovan MI per mouse averaged over electrodes for naive vs proficient * events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
-            fprintf(1, ['p value for anovan MI per mouse averaged over electrodes for naive vs proficient * groups for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
-            fprintf(1, ['p value for anovan MI per mouse averaged over electrodes for events * groups for PAC theta/' freq_names{pacii+1} '= %d \n\n'],  p(3));
+            [p,tbl,stats]=anovan(data_MI_per_mouse,{prof_naive_per_mouse events_per_mouse, groups_per_mouse},'model','interaction','varnames',{'proficient_vs_naive','events','groups'},'display','off');
+            fprintf(1, ['anovan MI per mouse averaged over electrodes for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
+            
+            fprintf(1, ['anovan p value for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
+            fprintf(1, ['anovan p value for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
+            fprintf(1, ['anovan p value for groups for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(3));
+            fprintf(1, ['anovan p value for naive vs proficient * events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
+            fprintf(1, ['anovan p value for naive vs proficient * groups for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
+            fprintf(1, ['anovan p value for events * groups for PAC theta/' freq_names{pacii+1} '= %d \n\n'],  p(3));
             
         end
         
-       
-        pfft=1
-%         save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
+        for pacii=1:no_pacii
+            for evNo=1:length(eventType)
+                figure(pacii+3)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                hold on
+                try
+                    legend([legends.pacii(pacii).evNo(evNo).p1 legends.pacii(pacii).evNo(evNo).p2 legends.pacii(pacii).evNo(evNo).p3 legends.pacii(pacii).evNo(evNo).p4],[handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+                        [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                catch
+                end
+            end
+            suptitle(['Average MI for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1}])
+        end
+        
+        %Now do the cumulative histograms and ranksums for mean vector angle per electrode per mouse
+        pvals=[];
+        legends=[];
+        cum_histoVA=[];
+        mean_all_meansVA=[];
+        max_all_shifted_meansVA=[];
+        all_means_shifted_meanVAs=[];
+        all_CIs_shifted_meanVAs=[];
+                            
+        for pacii=1:no_pacii
+            
+            ii_rank=0;
+            VA_rank=[];
+            maxVA=-2000;
+            minVA=2000;
+            
+            try
+                close(pacii+9)
+            catch
+            end
+            hFig=figure(pacii+9);
+            
+            if length(eventType)>2
+                set(hFig, 'units','normalized','position',[.1 .1 .7 .8])
+            else
+                set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            end
+            
+            
+            for evNo=1:length(eventType)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                hold on
+                
+                %Calculate the mean of the mean of each distribution
+                all_meansVA=[];
+                no_means=0;
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))>1
+                            
+                            %Note: we have to shift the mean to accomodate
+                            %all cumulative histograms in one angle axis
+                            if (evNo==2)&(pacii==2)
+                                pffft=1;
+                            end
+                            these_meanVAs=[];
+                            these_meanVAs=mean_meanVectorAngle_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo));
+                            
+                            sztmVA=size(these_meanVAs);
+                            shifted_meanVAs=zeros(sztmVA(1),sztmVA(2));
+                            
+                            this_meanVA=[];
+                            this_meanVA=(180/pi)*circ_axial(circ_mean(these_meanVAs'*pi/180))';
+                            
+                            no_means=no_means+1;
+                            all_meansVA(no_means)=this_meanVA;
+                        end
+                    end
+                end
+                
+                
+                mean_all_meansVA(pacii,evNo)=(180/pi)*circ_axial(circ_mean(all_meansVA'*pi/180))';
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))>1
+                            
+                            %Note: we have to shift the mean to accomodate
+                            %all cumulative histograms in one angle axis
+                            if (evNo==2)&(pacii==1)
+                                pffft=1;
+                            end
+                            these_meanVAs=[];
+                            these_meanVAs=mean_meanVectorAngle_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo));
+                            
+                            sztmVA=size(these_meanVAs);
+                            shifted_meanVAs=zeros(sztmVA(1),sztmVA(2));
+                            
+                            this_meanVA=[];
+                            this_meanVA=(180/pi)*circ_axial(circ_mean(these_meanVAs'*pi/180))';
+                            
+                            shifted_meanVAs(these_meanVAs>180+this_meanVA)=-(360-these_meanVAs(these_meanVAs>180+this_meanVA));
+                            shifted_meanVAs(these_meanVAs<this_meanVA-180)=360+these_meanVAs(these_meanVAs<this_meanVA-180);
+                            shifted_meanVAs((these_meanVAs<=180+this_meanVA)&(these_meanVAs>=this_meanVA-180))=these_meanVAs((these_meanVAs<=180+this_meanVA)&(these_meanVAs>=this_meanVA-180));
+                            
+                            %Make sure they are all grouped on the same
+                            %side of the cumulative histogram
+                            if mean_all_meansVA(pacii,evNo)<180
+                                if abs(this_meanVA-mean_all_meansVA(pacii,evNo))>abs(this_meanVA-360+mean_all_meansVA(pacii,evNo))
+                                    shifted_meanVAs=shifted_meanVAs-360;
+                                end
+                            else
+                                if abs(this_meanVA-mean_all_meansVA(pacii,evNo))<abs(this_meanVA-360+mean_all_meansVA(pacii,evNo))
+                                    shifted_meanVAs=shifted_meanVAs-360;
+                                end
+                            end
+                            
+                            max_all_shifted_meansVA(pacii,evNo,grNo,per_ii)=max(shifted_meanVAs');
+                            if length(eventType)>2
+                                all_means_shifted_meanVAs(pacii,evNo,grNo,per_ii)=mean(shifted_meanVAs');
+                                all_CIs_shifted_meanVAs(pacii,evNo,grNo,per_ii,1:2) = bootci(1000, {@mean, shifted_meanVAs'},'type','cper');
+                            end
+                            
+                            [f_VA,x_VA] = drg_ecdf(shifted_meanVAs);
+                            
+                            
+                            
+                            cum_histoVA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_VA=f_VA;
+                            cum_histoVA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_VA=x_VA;
+                            if grNo==1
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p1=plot(x_VA,f_VA,'Color',[1 0 0],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p2=plot(x_VA,f_VA,'Color',[0 0 1],'LineWidth',3);
+                                end
+                            else
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p3=plot(x_VA,f_VA,'Color',[1 0.7 0.7],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p4=plot(x_VA,f_VA,'Color',[0.7 0.7 1],'LineWidth',3);
+                                end
+                            end
+                            
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            VA_rank(ii_rank).meanVA=shifted_meanVAs;
+                            VA_rank(ii_rank).per_ii=per_ii;
+                            VA_rank(ii_rank).grNo=grNo;
+                            VA_rank(ii_rank).evNo=evNo;
+                            maxVA=max([maxVA max(shifted_meanVAs)]);
+                            minVA=min([minVA min(shifted_meanVAs)]);
+                        end
+                    end
+                    
+                end
+                
+                title(evTypeLabels{evNo})
+                xlabel('mean vector angle')
+                ylabel('Probability')
+            end
+            
+            
+            for evNo=1:length(eventType)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                xlim([minVA-0.1*(maxVA-minVA) maxVA+0.1*(maxVA-minVA)])
+            end
+            
+            %suptitle(['Mean vector angle per mouse for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1} ])
+            
+            %Now do the Watson-Williams test
+            fprintf(1, ['Watson-Williams test p values for mean vector angle for each electrode calculated per mouse for PAC theta ' freq_names{pacii+1} '\n'])
+            prof_naive_leg{1}='Proficient';
+            prof_naive_leg{2}='Naive';
+            
+            ww_test_out.ii_out=0;
+            pvals=[];
+            for ii=1:ii_rank
+                for jj=ii+1:ii_rank
+                    %p=ranksum(VA_rank(ii).meanVA,VA_rank(jj).meanVA);
+                    p=circ_wwtest(pi*VA_rank(ii).meanVA/180,pi*VA_rank(jj).meanVA/180);
+%                     fprintf(1, ['p value for ' handles_drgb.drgbchoices.group_no_names{VA_rank(ii).grNo} ' ' evTypeLabels{VA_rank(ii).evNo} ' ' prof_naive_leg{VA_rank(ii).per_ii} ' vs ' ...
+%                         handles_drgb.drgbchoices.group_no_names{VA_rank(jj).grNo} ' ' evTypeLabels{VA_rank(jj).evNo} ' ' prof_naive_leg{VA_rank(jj).per_ii} ' =  %d\n'],p)
+                    pvals=[pvals p];
+                    ww_test_out.ii_out=ww_test_out.ii_out+1;
+                    ww_test_out.p(ww_test_out.ii_out)=p;
+                    ww_test_out.label{ww_test_out.ii_out}=[handles_drgb.drgbchoices.group_no_names{VA_rank(ii).grNo} ' ' evTypeLabels{VA_rank(ii).evNo} ' ' prof_naive_leg{VA_rank(ii).per_ii} ' vs ' ...
+                        handles_drgb.drgbchoices.group_no_names{VA_rank(jj).grNo} ' ' evTypeLabels{VA_rank(jj).evNo} ' ' prof_naive_leg{VA_rank(jj).per_ii}];
+                end
+            end
+            
+            pFDR_VA_rank=drsFDRpval(pvals);
+            
+            %Now sort the data
+            these_ii_pairs=[1:ww_test_out.ii_out];
+            to_sort=[pvals' these_ii_pairs'];
+            sorted_rows=sortrows(to_sort);
+            ww_test_out.sorted_ii_pairs=sorted_rows(:,2);
+            
+            first_above=1;
+            for ii_out=1:ww_test_out.ii_out
+                if first_above==1
+                    if ww_test_out.p(ww_test_out.sorted_ii_pairs(ii_out))>pFDR_VA_rank
+                       first_above=0;
+                       fprintf(1, ['\n\npFDR for per mean vector angle for each electrode calculated per mouse  = %d\n\n'],pFDR_VA_rank);
+                    end
+                end
+                this_label=ww_test_out.label(ww_test_out.sorted_ii_pairs(ii_out));
+                fprintf(1, ['p value for ' this_label{1} ' =  %d\n'],ww_test_out.p(ww_test_out.sorted_ii_pairs(ii_out)));
+            end
+
+            fprintf(1, ['\n\n'])
+            
+            
+            
+        end
+        
+        %Now plot the average VA per mouse averaged over electrodes
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
+            
+            
+            ii_gr_included=0;
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    for per_ii=1:2
+                        
+                        
+                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))>1
+                            
+                            include_group=1;
+                            
+                            %Compute per mouse avearge
+                            each_mouse_average_VA=[];
+                            no_mice_included=0;
+                            for mouseNo=1:max(mean_MI_mouseNo_per_mouse)
+                                if mouse_included(mouseNo)==1
+                                    if sum(handles_drgb.drgbchoices.group_no(handles_drgb.drgbchoices.mouse_no==mouseNo)==grNo)
+                                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)&(mean_MI_mouseNo_per_mouse==mouseNo))>0
+                                            no_mice_included=no_mice_included+1;
+                                            these_VA=[];
+                                            these_VA=mean_meanVectorAngle_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)&(mean_MI_mouseNo_per_mouse==mouseNo));
+                                            each_mouse_average_VA(no_mice_included)=(180/pi)*circ_axial(circ_mean(these_VA'*pi/180)');
+                                        end
+                                    end
+                                end
+                            end
+                            if (pacii==1)&(evNo==2)
+                                pffft=1;
+                            end
+                            if no_mice_included>0
+                                
+                                include_group=1;
+                                
+                                for no_mice=1:no_mice_included
+                                    if each_mouse_average_VA(no_mice)>max_all_shifted_meansVA(pacii,evNo,grNo,per_ii)
+                                        each_mouse_average_VA(no_mice)=each_mouse_average_VA(no_mice)-360;
+                                    end
+                                end
+                                
+                                %Show the mean in the cumulative histos
+                                figure(pacii+9)
+                                subplot(ceil(length(eventType)/2),2,evNo)
+                                hold on
+                                
+                                
+                                for jj=1:length(each_mouse_average_VA)
+                                    this_f_VA=[];
+                                    this_f_VA=cum_histoVA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_VA;
+                                    
+                                    this_x_VA=[];
+                                    this_x_VA=cum_histoVA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_VA;
+                                    
+                                    xii_below=find(this_x_VA<each_mouse_average_VA(jj),1,'last');
+                                    xii_above=find(this_x_VA>each_mouse_average_VA(jj),1,'first');
+                                    
+                                    slope=(this_f_VA(xii_above)-this_f_VA(xii_below))/(this_x_VA(xii_above)-this_x_VA(xii_below));
+                                    intercept=this_f_VA(xii_above)-slope*this_x_VA(xii_above);
+                                    
+                                    this_f=slope*each_mouse_average_VA(jj)+intercept;
+                                    
+                                    if each_mouse_average_VA(jj)>max(this_x_VA)
+                                        this_f=1;
+                                    end
+                                    
+                                    if each_mouse_average_VA(jj)<min(this_x_VA)
+                                        this_f=0;
+                                    end
+                                    
+                                    if grNo==1
+                                        if per_ii==1
+                                            plot(each_mouse_average_VA(jj),this_f,'o','MarkerFace',[1 0 0],'MarkerEdge',[1 0 0],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_VA(jj),this_f,'o','MarkerFace',[0 0 1],'MarkerEdge',[0 0 1],'MarkerSize',10)
+                                        end
+                                    else
+                                        if per_ii==1
+                                            plot(each_mouse_average_VA(jj),this_f,'o','MarkerFace',[1 0.7 0.7],'MarkerEdge',[1 0.7 0.7],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_VA(jj),this_f,'o','MarkerFace',[0.7 0.7 1],'MarkerEdge',[0.7 0.7 1],'MarkerSize',10)
+                                        end
+                                    end
+                                    
+                                end
+                                
+                                
+                            end
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+        end
         
         
+        for pacii=1:no_pacii
+            %             figure(pacii+3)
+            %             for evNo=1:length(eventType)
+            %                 subplot(1,2,evNo)
+            %                 hold on
+            %                 try
+            %                 legend([legends.pacii(pacii).evNo(evNo).p1 legends.pacii(pacii).evNo(evNo).p2 legends.pacii(pacii).evNo(evNo).p3 legends.pacii(pacii).evNo(evNo).p4],[handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+            %                     [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+            %                 catch
+            %                 end
+            %
+            %             end
+            %             suptitle(['Average per mouse MI for each electrode calculated per for PAC theta/' freq_names{pacii+1}])
+            
+            figure(pacii+9)
+            for evNo=1:length(eventType)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                hold on
+                try
+                    legend([legends.pacii(pacii).evNo(evNo).p1 legends.pacii(pacii).evNo(evNo).p2 legends.pacii(pacii).evNo(evNo).p3 legends.pacii(pacii).evNo(evNo).p4],[handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+                        [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                catch
+                end
+                
+            end
+            suptitle(['Mean vector angle per mouse for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1} ])
+        end
+        
+        %Now do the cumulative histograms and ranksums for peak angle per electrode per mouse
+        pvals=[];
+        legends=[];
+        cum_histoPA=[];
+        mean_all_meansPA=[];
+        max_all_shifted_meansPA=[];
+        all_means_shifted_meanPAs=[];
+        all_CIs_shifted_meanPAs=[];
+                            
+        for pacii=1:no_pacii
+            
+            ii_rank=0;
+            PA_rank=[];
+            maxPA=-2000;
+            minPA=2000;
+            
+            try
+                close(pacii+12)
+            catch
+            end
+            hFig=figure(pacii+12);
+            
+            if length(eventType)>2
+                set(hFig, 'units','normalized','position',[.1 .1 .7 .8])
+            else
+                set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            end
+            
+            
+            for evNo=1:length(eventType)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                hold on
+                
+                %Calculate the mean of the mean of each distribution
+                all_meansPA=[];
+                no_means=0;
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))>1
+                            
+                            %Note: we have to shift the mean to accomodate
+                            %all cumulative histograms in one angle axis
+                            if (evNo==2)&(pacii==2)
+                                pffft=1;
+                            end
+                            these_meanPAs=[];
+                            these_meanPAs=mean_peakAngle_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo));
+                            
+                            sztmPA=size(these_meanPAs);
+                            shifted_meanPAs=zeros(sztmPA(1),sztmPA(2));
+                            
+                            this_meanPA=[];
+                            this_meanPA=(180/pi)*circ_axial(circ_mean(these_meanPAs'*pi/180))';
+                            
+                            no_means=no_means+1;
+                            all_meansPA(no_means)=this_meanPA;
+                        end
+                    end
+                end
+                
+                
+                mean_all_meansPA(pacii,evNo)=(180/pi)*circ_axial(circ_mean(all_meansPA'*pi/180))';
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))>1
+                            
+                            %Note: we have to shift the mean to accomodate
+                            %all cumulative histograms in one angle axis
+                            if (evNo==2)&(pacii==1)
+                                pffft=1;
+                            end
+                            these_meanPAs=[];
+                            these_meanPAs=mean_peakAngle_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo));
+                            
+                            sztmPA=size(these_meanPAs);
+                            shifted_meanPAs=zeros(sztmPA(1),sztmPA(2));
+                            
+                            this_meanPA=[];
+                            this_meanPA=(180/pi)*circ_axial(circ_mean(these_meanPAs'*pi/180))';
+                            
+                            shifted_meanPAs(these_meanPAs>180+this_meanPA)=-(360-these_meanPAs(these_meanPAs>180+this_meanPA));
+                            shifted_meanPAs(these_meanPAs<this_meanPA-180)=360+these_meanPAs(these_meanPAs<this_meanPA-180);
+                            shifted_meanPAs((these_meanPAs<=180+this_meanPA)&(these_meanPAs>=this_meanPA-180))=these_meanPAs((these_meanPAs<=180+this_meanPA)&(these_meanPAs>=this_meanPA-180));
+                            
+                            %Make sure they are all grouped on the same
+                            %side of the cumulative histogram
+                            if mean_all_meansPA(pacii,evNo)<180
+                                if abs(this_meanPA-mean_all_meansPA(pacii,evNo))>abs(this_meanPA-360+mean_all_meansPA(pacii,evNo))
+                                    shifted_meanPAs=shifted_meanPAs-360;
+                                end
+                            else
+                                if abs(this_meanPA-mean_all_meansPA(pacii,evNo))<abs(this_meanPA-360+mean_all_meansPA(pacii,evNo))
+                                    shifted_meanPAs=shifted_meanPAs-360;
+                                end
+                            end
+                            
+                            max_all_shifted_meansPA(pacii,evNo,grNo,per_ii)=max(shifted_meanPAs');
+                            if length(eventType)>2
+                                all_means_shifted_meanPAs(pacii,evNo,grNo,per_ii)=mean(shifted_meanPAs');
+                                all_CIs_shifted_meanPAs(pacii,evNo,grNo,per_ii,1:2) = bootci(1000, {@mean, shifted_meanPAs'},'type','cper');
+                            end
+                            
+                            [f_PA,x_PA] = drg_ecdf(shifted_meanPAs);
+                            
+                            
+                            
+                            cum_histoPA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_PA=f_PA;
+                            cum_histoPA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_PA=x_PA;
+                            if grNo==1
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p1=plot(x_PA,f_PA,'Color',[1 0 0],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p2=plot(x_PA,f_PA,'Color',[0 0 1],'LineWidth',3);
+                                end
+                            else
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p3=plot(x_PA,f_PA,'Color',[1 0.7 0.7],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p4=plot(x_PA,f_PA,'Color',[0.7 0.7 1],'LineWidth',3);
+                                end
+                            end
+                            
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            PA_rank(ii_rank).meanPA=shifted_meanPAs;
+                            PA_rank(ii_rank).per_ii=per_ii;
+                            PA_rank(ii_rank).grNo=grNo;
+                            PA_rank(ii_rank).evNo=evNo;
+                            maxPA=max([maxPA max(shifted_meanPAs)]);
+                            minPA=min([minPA min(shifted_meanPAs)]);
+                        end
+                    end
+                    
+                end
+                
+                title(evTypeLabels{evNo})
+                xlabel('Peak angle')
+                ylabel('Probability')
+            end
+            
+            
+            for evNo=1:length(eventType)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                xlim([minPA-0.1*(maxPA-minPA) maxPA+0.1*(maxPA-minPA)])
+            end
+            
+            %suptitle(['Mean vector angle per mouse for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1} ])
+            
+            %Now do the Watson-Williams test
+            fprintf(1, ['Watson-Williams test p values for peak angle for each electrode calculated per mouse for PAC theta ' freq_names{pacii+1} '\n'])
+            prof_naive_leg{1}='Proficient';
+            prof_naive_leg{2}='Naive';
+            
+            ww_test_out.ii_out=0;
+            pvals=[];
+            for ii=1:ii_rank
+                for jj=ii+1:ii_rank
+                    %p=ranksum(PA_rank(ii).meanPA,PA_rank(jj).meanPA);
+                    p=circ_wwtest(pi*PA_rank(ii).meanPA/180,pi*PA_rank(jj).meanPA/180);
+%                     fprintf(1, ['p value for ' handles_drgb.drgbchoices.group_no_names{PA_rank(ii).grNo} ' ' evTypeLabels{PA_rank(ii).evNo} ' ' prof_naive_leg{PA_rank(ii).per_ii} ' vs ' ...
+%                         handles_drgb.drgbchoices.group_no_names{PA_rank(jj).grNo} ' ' evTypeLabels{PA_rank(jj).evNo} ' ' prof_naive_leg{PA_rank(jj).per_ii} ' =  %d\n'],p)
+                    pvals=[pvals p];
+                    ww_test_out.ii_out=ww_test_out.ii_out+1;
+                    ww_test_out.p(ww_test_out.ii_out)=p;
+                    ww_test_out.label{ww_test_out.ii_out}=[handles_drgb.drgbchoices.group_no_names{PA_rank(ii).grNo} ' ' evTypeLabels{PA_rank(ii).evNo} ' ' prof_naive_leg{PA_rank(ii).per_ii} ' vs ' ...
+                        handles_drgb.drgbchoices.group_no_names{PA_rank(jj).grNo} ' ' evTypeLabels{PA_rank(jj).evNo} ' ' prof_naive_leg{PA_rank(jj).per_ii}];
+                end
+            end
+            
+            pFDR_PA_rank=drsFDRpval(pvals);
+            
+            %Now sort the data
+            these_ii_pairs=[1:ww_test_out.ii_out];
+            to_sort=[pvals' these_ii_pairs'];
+            sorted_rows=sortrows(to_sort);
+            ww_test_out.sorted_ii_pairs=sorted_rows(:,2);
+            
+            first_above=1;
+            for ii_out=1:ww_test_out.ii_out
+                if first_above==1
+                    if ww_test_out.p(ww_test_out.sorted_ii_pairs(ii_out))>pFDR_PA_rank
+                       first_above=0;
+                       fprintf(1, ['\n\npFDR for peak angle for each electrode calculated per mouse  = %d\n\n'],pFDR_PA_rank);
+                    end
+                end
+                this_label=ww_test_out.label(ww_test_out.sorted_ii_pairs(ii_out));
+                fprintf(1, ['p value for ' this_label{1} ' =  %d\n'],ww_test_out.p(ww_test_out.sorted_ii_pairs(ii_out)));
+            end
+
+            fprintf(1, ['\n\n'])
+            
+            
+            
+        end
+        
+        %Now plot the average PA per mouse averaged over electrodes
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
+            
+            
+            ii_gr_included=0;
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    for per_ii=1:2
+                        
+                        
+                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo))>1
+                            
+                            include_group=1;
+                            
+                            %Compute per mouse avearge
+                            each_mouse_average_PA=[];
+                            no_mice_included=0;
+                            for mouseNo=1:max(mean_MI_mouseNo_per_mouse)
+                                if mouse_included(mouseNo)==1
+                                    if sum(handles_drgb.drgbchoices.group_no(handles_drgb.drgbchoices.mouse_no==mouseNo)==grNo)
+                                        if sum((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)&(mean_MI_mouseNo_per_mouse==mouseNo))>0
+                                            no_mice_included=no_mice_included+1;
+                                            these_PA=[];
+                                            these_PA=mean_peakAngle_per_mouse((~isnan(mean_MI_per_mouse))&(mean_MI_perii_per_mouse==per_ii)&(mean_MI_pacii_per_mouse==pacii)&(mean_MI_evNo_per_mouse==evNo)&(mean_MI_group_no_per_mouse==grNo)&(mean_MI_mouseNo_per_mouse==mouseNo));
+                                            each_mouse_average_PA(no_mice_included)=(180/pi)*circ_axial(circ_mean(these_PA'*pi/180)');
+                                        end
+                                    end
+                                end
+                            end
+                            if (pacii==1)&(evNo==2)
+                                pffft=1;
+                            end
+                            if no_mice_included>0
+                                
+                                include_group=1;
+                                
+                                for no_mice=1:no_mice_included
+                                    if each_mouse_average_PA(no_mice)>max_all_shifted_meansPA(pacii,evNo,grNo,per_ii)
+                                        each_mouse_average_PA(no_mice)=each_mouse_average_PA(no_mice)-360;
+                                    end
+                                end
+                                
+                                %Show the mean in the cumulative histos
+                                figure(pacii+12)
+                                subplot(ceil(length(eventType)/2),2,evNo)
+                                hold on
+                                
+                                
+                                for jj=1:length(each_mouse_average_PA)
+                                    this_f_PA=[];
+                                    this_f_PA=cum_histoPA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_PA;
+                                    
+                                    this_x_PA=[];
+                                    this_x_PA=cum_histoPA.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_PA;
+                                    
+                                    xii_below=find(this_x_PA<each_mouse_average_PA(jj),1,'last');
+                                    xii_above=find(this_x_PA>each_mouse_average_PA(jj),1,'first');
+                                    
+                                    slope=(this_f_PA(xii_above)-this_f_PA(xii_below))/(this_x_PA(xii_above)-this_x_PA(xii_below));
+                                    intercept=this_f_PA(xii_above)-slope*this_x_PA(xii_above);
+                                    
+                                    this_f=slope*each_mouse_average_PA(jj)+intercept;
+                                    
+                                    if each_mouse_average_PA(jj)>max(this_x_PA)
+                                        this_f=1;
+                                    end
+                                    
+                                    if each_mouse_average_PA(jj)<min(this_x_PA)
+                                        this_f=0;
+                                    end
+                                    
+                                    if grNo==1
+                                        if per_ii==1
+                                            plot(each_mouse_average_PA(jj),this_f,'o','MarkerFace',[1 0 0],'MarkerEdge',[1 0 0],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_PA(jj),this_f,'o','MarkerFace',[0 0 1],'MarkerEdge',[0 0 1],'MarkerSize',10)
+                                        end
+                                    else
+                                        if per_ii==1
+                                            plot(each_mouse_average_PA(jj),this_f,'o','MarkerFace',[1 0.7 0.7],'MarkerEdge',[1 0.7 0.7],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_PA(jj),this_f,'o','MarkerFace',[0.7 0.7 1],'MarkerEdge',[0.7 0.7 1],'MarkerSize',10)
+                                        end
+                                    end
+                                    
+                                end
+                                
+                                
+                            end
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+        end
+        
+        
+        for pacii=1:no_pacii
+            %             figure(pacii+3)
+            %             for evNo=1:length(eventType)
+            %                 subplot(1,2,evNo)
+            %                 hold on
+            %                 try
+            %                 legend([legends.pacii(pacii).evNo(evNo).p1 legends.pacii(pacii).evNo(evNo).p2 legends.pacii(pacii).evNo(evNo).p3 legends.pacii(pacii).evNo(evNo).p4],[handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+            %                     [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+            %                 catch
+            %                 end
+            %
+            %             end
+            %             suptitle(['Average per mouse MI for each electrode calculated per for PAC theta/' freq_names{pacii+1}])
+            
+            figure(pacii+12)
+            for evNo=1:length(eventType)
+                subplot(ceil(length(eventType)/2),2,evNo)
+                hold on
+                try
+                    legend([legends.pacii(pacii).evNo(evNo).p1 legends.pacii(pacii).evNo(evNo).p2 legends.pacii(pacii).evNo(evNo).p3 legends.pacii(pacii).evNo(evNo).p4],[handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+                        [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                catch
+                end
+                
+            end
+            suptitle(['Peak angle per mouse for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1} ])
+        end
+        
+        
+        %If this is for concentration plot as a function of concentration
+        if length(eventType)>2
+            
+            
+            for pacii=1:no_pacii
+                try
+                    close(pacii+12)
+                catch
+                end
+                hFig=figure(pacii+12);
+                
+                set(hFig, 'units','normalized','position',[.1 .1 .4 .4])
+                hold on
+                
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    for per_ii=1:2
+                        
+                        these_means=zeros(length(eventType),1);
+                        these_means(:,1)=all_means_shifted_meanVAs(pacii,:,grNo,per_ii);
+                        
+                        these_CIs=zeros(length(eventType),2);
+                        these_CIs(:,:)=all_CIs_shifted_meanVAs(pacii,:,grNo,per_ii,1:2);
+                        
+                        
+                        if grNo==1
+                            if per_ii==1
+                                p1=plot(concs,these_means,'-o','Color',[1 0 0], 'MarkerFace',[1 0 0],'MarkerEdge',[1 0 0],'MarkerSize',10)
+                            else
+                                p2=plot(concs,these_means,'-o','Color',[0 0 1],'MarkerFace',[0 0 1],'MarkerEdge',[0 0 1],'MarkerSize',10)
+                            end
+                        else
+                            if per_ii==1
+                                p3=plot(concs,these_means,'-o','Color',[1 0.7 0.7],'MarkerFace',[1 0.7 0.7],'MarkerEdge',[1 0.7 0.7],'MarkerSize',10)
+                            else
+                                p4=plot(concs,these_means,'-o','Color',[0.7 0.7 1],'MarkerFace',[0.7 0.7 1],'MarkerEdge',[0.7 0.7 1],'MarkerSize',10)
+                            end
+                        end
+                        
+                        for evTy=1:length(eventType)
+                            plot([concs(evTy) concs(evTy)],these_CIs(evTy,:),'-k')
+                        end
+                        
+                        
+                    end
+                end
+                legend([p1 p2 p3 p4],[handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+                    [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                xlabel('Percent odor in mineral oil')
+                ylabel('Phase (deg)')
+                title(['Mean vector angle per mouse for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1} ])
+                 
+            end
+        end
+        pfft=1;
+        
+         
     case 20
         % Multiclass ROC analysis of LFP power differences for naive and proficient
         % mice for different epochs (concentrations or S+ vs. S-) and different groups. Analyzed per mouse
@@ -9150,7 +9953,7 @@ switch which_display
                 mouse_has_files=0;
                 theseEvNosPerEl=[];
                 for evNo=1:length(eventType)
-                    for bwii=1:4
+                    for bwii=1:no_bandwidths
                         for elec=1:16
                             theseEvNosPerEl(evNo,bwii,elec).noEv=0;
                         end
@@ -9162,7 +9965,7 @@ switch which_display
                         
                         theseEvNos=[];
                         for evNo=1:length(eventType)
-                            for bwii=1:4
+                            for bwii=1:no_bandwidths
                                 theseEvNos(evNo,bwii).noEv=0;
                             end
                         end
@@ -9171,7 +9974,7 @@ switch which_display
                             if sum(files==fileNo)>0
                                 if handles_drgb.drgbchoices.mouse_no(fileNo)==mouseNo
                                     
-                                    
+                                     
                                     
                                     lfpodNo_ref=find((files_per_lfp==fileNo)&(elec_per_lfp==elec)&(window_per_lfp==refWin));
                                     
@@ -9181,25 +9984,25 @@ switch which_display
                                         if (~isempty(handles_drgb.drgb.lfpevpair(lfpodNo_ref).allPower))
                                             
                                             percent_mask=[];
-                                            percent_mask=(handles_drgb.drgb.lfpevpair(lfpodNo_ref).perCorrLFPPower>=percent_windows(per_ii,1))...
-                                                &(handles_drgb.drgb.lfpevpair(lfpodNo_ref).perCorrLFPPower<=percent_windows(per_ii,2));
+                                            percent_mask=logical((handles_drgb.drgb.lfpevpair(lfpodNo_ref).perCorrLFPPower>=percent_windows(per_ii,1))...
+                                                &(handles_drgb.drgb.lfpevpair(lfpodNo_ref).perCorrLFPPower<=percent_windows(per_ii,2)));
                                             
                                             
                                             for evNo=1:length(eventType)
                                                 
                                                 noWB_for_evNo(evNo)=-1;
-                                                 
+                                                
                                                 trials_in_event_Ev=[];
                                                 trials_in_event_Ev=(handles_drgb.drgb.lfpevpair(lfpodNo_ref).which_eventLFPPower(eventType(evNo),:)==1)&percent_mask;
                                                 
                                                 if (sum(trials_in_event_Ev)>=1)
                                                     
                                                     lfpodNo=find((files_per_lfp==fileNo)&(elec_per_lfp==elec)&(window_per_lfp==winNo));
-                                                     
+                                                    
                                                     % Ev1
                                                     this_dB_powerref=zeros(sum(trials_in_event_Ev),length(frequency));
                                                     this_dB_powerref(:,:)=10*log10(handles_drgb.drgb.lfpevpair(lfpodNo_ref).allPower(trials_in_event_Ev,:));
-
+                                                    
                                                     
                                                     this_dB_power=zeros(sum(trials_in_event_Ev),length(frequency));
                                                     this_dB_power(:,:)=10*log10(handles_drgb.drgb.lfpevpair(lfpodNo).allPower(trials_in_event_Ev,:));
@@ -9212,11 +10015,12 @@ switch which_display
                                                     
                                                     noWB_for_evNo(evNo)=evNo_out(evNo).noWB;
                                                     
-                                                    theseEvNos(evNo).groupNo(1,theseEvNos(evNo,1).noEv+1:theseEvNos(evNo,1).noEv+sum(trials_in_event_Ev))=handles_drgb.drgbchoices.group_no(fileNo)*ones(1,sum(trials_in_event_Ev));
                                                     
                                                     %Do per bandwidth analysis
                                                     for bwii=1:no_bandwidths
                                                         
+                                                        theseEvNos(evNo,bwii).groupNo(theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=handles_drgb.drgbchoices.group_no(fileNo)*ones(1,sum(trials_in_event_Ev));
+                                                    
                                                         this_band=(frequency>=low_freq(bwii))&(frequency<=high_freq(bwii));
                                                         
                                                         %Enter the  Ev1
@@ -9231,6 +10035,8 @@ switch which_display
                                                         end
                                                         
                                                         theseEvNosPerEl(evNo,bwii,elec).this_delta_dB_powerEv(1,theseEvNosPerEl(evNo,bwii,elec).noEv+1:theseEvNosPerEl(evNo,bwii,elec).noEv+sum(trials_in_event_Ev))=this_delta_dB_powerEv';
+                                                        theseEvNosPerEl(evNo,bwii,elec).groupNo(1,theseEvNosPerEl(evNo,bwii,elec).noEv+1:theseEvNosPerEl(evNo,bwii,elec).noEv+sum(trials_in_event_Ev))=handles_drgb.drgbchoices.group_no(fileNo)*ones(1,sum(trials_in_event_Ev));
+                                                        
                                                         theseEvNosPerEl(evNo,bwii,elec).noEv=theseEvNosPerEl(evNo,bwii,elec).noEv+sum(trials_in_event_Ev);
                                                         
                                                         evNo_out(evNo).mean_delta_dB_powerEvperBW(evNo_out(evNo).noWB,bwii)=mean(this_delta_dB_powerEv);
@@ -9273,17 +10079,19 @@ switch which_display
                             mouse_included(mouseNo)=1;
                             %Calculate per mouse per electrode delta_dB
                             for grNo=1:max(handles_drgb.drgbchoices.group_no)
-                                if sum(theseEvNos(evNo).groupNo==grNo)>0
-                                    for evNo=1:length(eventType)
-                                        for bwii=1:4
-                                            delta_dB_No_per_mouse=delta_dB_No_per_mouse+1;
-                                            delta_dB_per_mouse(delta_dB_No_per_mouse)=mean(theseEvNos(evNo,bwii).this_delta_dB_powerEv(theseEvNos(evNo).groupNo==grNo));
-                                            delta_dB_perii_per_mouse(delta_dB_No_per_mouse)=per_ii;
-                                            delta_dB_evNo_per_mouse(delta_dB_No_per_mouse)=evNo;
-                                            delta_dB_bwii_per_mouse(delta_dB_No_per_mouse)=bwii;
-                                            delta_dB_mouseNo_per_mouse(delta_dB_No_per_mouse)=mouseNo;
-                                            delta_dB_electrode_per_mouse(delta_dB_No_per_mouse)=elec;
-                                            delta_dB_group_no_per_mouse(delta_dB_No_per_mouse)=grNo;
+                                for evNo=1:length(eventType)
+                                    if theseEvNos(evNo).noEv>0
+                                        for bwii=1:no_bandwidths
+                                            if sum(theseEvNos(evNo,1).groupNo==grNo)>0
+                                                delta_dB_No_per_mouse=delta_dB_No_per_mouse+1;
+                                                delta_dB_per_mouse(delta_dB_No_per_mouse)=mean(theseEvNos(evNo,bwii).this_delta_dB_powerEv(1,logical(theseEvNos(evNo,bwii).groupNo==grNo)));
+                                                delta_dB_perii_per_mouse(delta_dB_No_per_mouse)=per_ii;
+                                                delta_dB_evNo_per_mouse(delta_dB_No_per_mouse)=evNo;
+                                                delta_dB_bwii_per_mouse(delta_dB_No_per_mouse)=bwii;
+                                                delta_dB_mouseNo_per_mouse(delta_dB_No_per_mouse)=mouseNo;
+                                                delta_dB_electrode_per_mouse(delta_dB_No_per_mouse)=elec;
+                                                delta_dB_group_no_per_mouse(delta_dB_No_per_mouse)=grNo;
+                                            end
                                         end
                                     end
                                 end
@@ -9294,90 +10102,93 @@ switch which_display
                             if can_calculate_auroc==1
                                 for grNo=1:max(handles_drgb.drgbchoices.group_no)
                                     for evNo1=1:length(eventType)
-                                        for evNo2=evNo1+1:length(eventType)
-                                            for bwii=1:4
-                                                
-                                                
-                                                %Enter Ev1
-                                                trials_in_event_Ev1=length(theseEvNos(evNo1,bwii).this_delta_dB_powerEv(theseEvNos(evNo1).groupNo==grNo));
-                                                this_delta_dB_powerEv1=zeros(trials_in_event_Ev1,1);
-                                                this_delta_dB_powerEv1=theseEvNos(evNo1,bwii).this_delta_dB_powerEv(theseEvNos(evNo1).groupNo==grNo);
-                                                roc_data=[];
-                                                roc_data(1:trials_in_event_Ev1,1)=this_delta_dB_powerEv1;
-                                                roc_data(1:trials_in_event_Ev1,2)=zeros(trials_in_event_Ev1,1);
-                                                
-                                                %Enter Ev2
-                                                trials_in_event_Ev2=length(theseEvNos(evNo2,bwii).this_delta_dB_powerEv(theseEvNos(evNo2).groupNo==grNo));
-                                                total_trials=trials_in_event_Ev1+trials_in_event_Ev2;
-                                                this_delta_dB_powerEv2=zeros(trials_in_event_Ev2,1);
-                                                this_delta_dB_powerEv2=theseEvNos(evNo2,bwii).this_delta_dB_powerEv(theseEvNos(evNo2).groupNo==grNo);
-                                                roc_data(trials_in_event_Ev1+1:total_trials,1)=this_delta_dB_powerEv2;
-                                                roc_data(trials_in_event_Ev1+1:total_trials,2)=ones(trials_in_event_Ev2,1);
-                                                
-                                                
-                                                %Find  per electrode ROC
-                                                if (trials_in_event_Ev1>=5)&(trials_in_event_Ev2>=5)
-                                                    no_ROCs=no_ROCs+1;
-                                                    roc=roc_calc(roc_data,0,0.05,0);
-                                                    ROCout(no_ROCs).fileNo=handles_drgb.drgb.lfpevpair(lfpodNo_ref).fileNo;
-                                                    ROCelec(no_ROCs)=elec;
-                                                    ROCgroups(no_ROCs)=grNo;
-                                                    ROCmouse(no_ROCs)=mouseNo;
-                                                    ROCbandwidth(no_ROCs)=bwii;
-                                                    ROCper_ii(no_ROCs)=per_ii;
-                                                    ROCEvNo1(no_ROCs)=evNo1;
-                                                    ROCEvNo2(no_ROCs)=evNo2;
-                                                    if sum(eventType==3)==0
-                                                        if ((abs(evNo1-2)<=1)&(abs(evNo2-5)<=1))||((abs(evNo1-5)<=1)&(abs(evNo2-2)<=1))
-                                                            ROC_between(no_ROCs)=1;
-                                                        else
-                                                            ROC_between(no_ROCs)=0;
-                                                        end
-                                                        ROC_neighbor(no_ROCs)=abs(evNo1-evNo2);
-                                                    else
-                                                        %This is S+/S-,
-                                                        %these values are
-                                                        %assigned
-                                                        %arbitrarily so
-                                                        %that plotting
-                                                        %auROC works
-                                                        ROC_between(no_ROCs)=1;
-                                                        ROC_neighbor(no_ROCs)=2;
-                                                    end
-                                                    
-                                                    auROC(no_ROCs)=roc.AUC-0.5;
-                                                    p_valROC(no_ROCs)=roc.p;
-                                                    p_vals_ROC=[p_vals_ROC roc.p];
-                                                    
-                                                    %I have this code here to plot the ROC
-                                                    if (per_ii==1)&(bwii==4)&(roc.AUC-0.5>0.3)
-                                                        show_roc=0;
-                                                        if show_roc==1
-                                                            %I have this code here to plot the ROC
-                                                            roc=roc_calc(roc_data,0,0.05,1);
-                                                            
-                                                            %Do the histograms
-                                                            try
-                                                                close(2)
-                                                            catch
+                                        if theseEvNos(evNo1).noEv>0
+                                            for evNo2=evNo1+1:length(eventType)
+                                                if theseEvNos(evNo2).noEv>0
+                                                    for bwii=1:no_bandwidths
+                                                        
+                                                        
+                                                        %Enter Ev1
+                                                        trials_in_event_Ev1=length(theseEvNos(evNo1,bwii).this_delta_dB_powerEv(theseEvNos(evNo1).groupNo==grNo));
+                                                        this_delta_dB_powerEv1=zeros(trials_in_event_Ev1,1);
+                                                        this_delta_dB_powerEv1=theseEvNos(evNo1,bwii).this_delta_dB_powerEv(theseEvNos(evNo1).groupNo==grNo);
+                                                        roc_data=[];
+                                                        roc_data(1:trials_in_event_Ev1,1)=this_delta_dB_powerEv1;
+                                                        roc_data(1:trials_in_event_Ev1,2)=zeros(trials_in_event_Ev1,1);
+                                                        
+                                                        %Enter Ev2
+                                                        trials_in_event_Ev2=length(theseEvNos(evNo2,bwii).this_delta_dB_powerEv(theseEvNos(evNo2).groupNo==grNo));
+                                                        total_trials=trials_in_event_Ev1+trials_in_event_Ev2;
+                                                        this_delta_dB_powerEv2=zeros(trials_in_event_Ev2,1);
+                                                        this_delta_dB_powerEv2=theseEvNos(evNo2,bwii).this_delta_dB_powerEv(theseEvNos(evNo2).groupNo==grNo);
+                                                        roc_data(trials_in_event_Ev1+1:total_trials,1)=this_delta_dB_powerEv2;
+                                                        roc_data(trials_in_event_Ev1+1:total_trials,2)=ones(trials_in_event_Ev2,1);
+                                                        
+                                                        
+                                                        %Find  per electrode ROC
+                                                        if (trials_in_event_Ev1>=5)&(trials_in_event_Ev2>=5)
+                                                            no_ROCs=no_ROCs+1;
+                                                            roc=roc_calc(roc_data,0,0.05,0);
+                                                            ROCout(no_ROCs).fileNo=handles_drgb.drgb.lfpevpair(lfpodNo_ref).fileNo;
+                                                            ROCelec(no_ROCs)=elec;
+                                                            ROCgroups(no_ROCs)=grNo;
+                                                            ROCmouse(no_ROCs)=mouseNo;
+                                                            ROCbandwidth(no_ROCs)=bwii;
+                                                            ROCper_ii(no_ROCs)=per_ii;
+                                                            ROCEvNo1(no_ROCs)=evNo1;
+                                                            ROCEvNo2(no_ROCs)=evNo2;
+                                                            if sum(eventType==3)==0
+                                                                if ((abs(evNo1-2)<=1)&(abs(evNo2-5)<=1))||((abs(evNo1-5)<=1)&(abs(evNo2-2)<=1))
+                                                                    ROC_between(no_ROCs)=1;
+                                                                else
+                                                                    ROC_between(no_ROCs)=0;
+                                                                end
+                                                                ROC_neighbor(no_ROCs)=abs(evNo1-evNo2);
+                                                            else
+                                                                %This is S+/S-,
+                                                                %these values are
+                                                                %assigned
+                                                                %arbitrarily so
+                                                                %that plotting
+                                                                %auROC works
+                                                                ROC_between(no_ROCs)=1;
+                                                                ROC_neighbor(no_ROCs)=2;
                                                             end
-                                                            figure(2)
                                                             
-                                                            hold on
+                                                            auROC(no_ROCs)=roc.AUC-0.5;
+                                                            p_valROC(no_ROCs)=roc.p;
+                                                            p_vals_ROC=[p_vals_ROC roc.p];
                                                             
-                                                            max_dB=max([max(this_delta_dB_powerEv1) max(this_delta_dB_powerEv2)]);
-                                                            min_dB=min([min(this_delta_dB_powerEv1) min(this_delta_dB_powerEv2)]);
-                                                            
-                                                            edges=[min_dB-0.1*(max_dB-min_dB):(max_dB-min_dB)/20:max_dB+0.1*(max_dB-min_dB)];
-                                                            histogram(this_delta_dB_powerEv1,edges,'FaceColor','b','EdgeColor','b')
-                                                            histogram(this_delta_dB_powerEv2,edges,'FaceColor','r','EdgeColor','r')
-                                                            xlabel('delta power dB')
-                                                            title(['Histogram for conentrations ' num2str(concs2(evNo1)) ' and ' num2str(concs2(evNo2))])
-                                                            pffft=1;
+                                                            %I have this code here to plot the ROC
+                                                            if (per_ii==1)&(bwii==4)&(roc.AUC-0.5>0.3)
+                                                                show_roc=0;
+                                                                if show_roc==1
+                                                                    %I have this code here to plot the ROC
+                                                                    roc=roc_calc(roc_data,0,0.05,1);
+                                                                    
+                                                                    %Do the histograms
+                                                                    try
+                                                                        close(2)
+                                                                    catch
+                                                                    end
+                                                                    figure(2)
+                                                                    
+                                                                    hold on
+                                                                    
+                                                                    max_dB=max([max(this_delta_dB_powerEv1) max(this_delta_dB_powerEv2)]);
+                                                                    min_dB=min([min(this_delta_dB_powerEv1) min(this_delta_dB_powerEv2)]);
+                                                                    
+                                                                    edges=[min_dB-0.1*(max_dB-min_dB):(max_dB-min_dB)/20:max_dB+0.1*(max_dB-min_dB)];
+                                                                    histogram(this_delta_dB_powerEv1,edges,'FaceColor','b','EdgeColor','b')
+                                                                    histogram(this_delta_dB_powerEv2,edges,'FaceColor','r','EdgeColor','r')
+                                                                    xlabel('delta power dB')
+                                                                    title(['Histogram for conentrations ' num2str(concs2(evNo1)) ' and ' num2str(concs2(evNo2))])
+                                                                    pffft=1;
+                                                                end
+                                                            end
                                                         end
                                                     end
                                                 end
-                                                
                                             end
                                         end
                                     end
@@ -9400,26 +10211,43 @@ switch which_display
                             for evNo2=evNo1+1:length(eventType)
                                 
                                 
-                                for bwii=1:4
+                                for bwii=1:no_bandwidths
                                     
                                     %Enter Ev1
-                                    trials_in_event_Ev1=length(theseEvNosPerEl(evNo1,bwii,which_electrodes(1)).this_delta_dB_powerEv(theseEvNos(evNo1).groupNo==grNo));
+                                    trials_in_event_Ev1=length(theseEvNosPerEl(evNo1,bwii,which_electrodes(1)).this_delta_dB_powerEv(theseEvNosPerEl(evNo1,bwii,which_electrodes(1)).groupNo==grNo));
+                                    
                                     this_delta_dB_powerEv1=zeros(trials_in_event_Ev1,1);
+                                    
+%                                     for elec=which_electrodes
+%                                         this_delta_dB_powerEv1=this_delta_dB_powerEv1+(theseEvNosPerEl(evNo1,bwii,elec).this_delta_dB_powerEv((theseEvNosPerEl(evNo1,bwii,elec).groupNo==grNo))')/length(which_electrodes);
+%                                     end
+%                                     
+                                    no_elects=0;
                                     for elec=which_electrodes
-                                        this_delta_dB_powerEv1=this_delta_dB_powerEv1+(theseEvNosPerEl(evNo1,bwii,elec).this_delta_dB_powerEv((theseEvNos(evNo1).groupNo==grNo))')/length(which_electrodes);
+                                        if length(this_delta_dB_powerEv1)==sum(theseEvNosPerEl(evNo1,bwii,elec).groupNo==grNo)
+                                            this_delta_dB_powerEv1=this_delta_dB_powerEv1+(theseEvNosPerEl(evNo1,bwii,elec).this_delta_dB_powerEv((theseEvNosPerEl(evNo1,bwii,elec).groupNo==grNo))');
+                                            no_elects=no_elects+1;
+                                        end
                                     end
+                                    this_delta_dB_powerEv1=this_delta_dB_powerEv1/no_elects;
                                     
                                     roc_data=[];
                                     roc_data(1:trials_in_event_Ev1,1)=this_delta_dB_powerEv1;
                                     roc_data(1:trials_in_event_Ev1,2)=zeros(trials_in_event_Ev1,1);
                                     
                                     %Enter Ev2
-                                    trials_in_event_Ev2=length(theseEvNosPerEl(evNo2,bwii,which_electrodes(1)).this_delta_dB_powerEv((theseEvNos(evNo2).groupNo==grNo)));
+                                    trials_in_event_Ev2=length(theseEvNosPerEl(evNo2,bwii,which_electrodes(1)).this_delta_dB_powerEv(theseEvNosPerEl(evNo2,bwii,which_electrodes(1)).groupNo==grNo));
                                     total_trials=trials_in_event_Ev1+trials_in_event_Ev2;
                                     this_delta_dB_powerEv2=zeros(trials_in_event_Ev2,1);
+                                    
+                                    no_elects=0;
                                     for elec=which_electrodes
-                                        this_delta_dB_powerEv2=this_delta_dB_powerEv2+(theseEvNosPerEl(evNo2,bwii,elec).this_delta_dB_powerEv((theseEvNos(evNo2).groupNo==grNo))')/length(which_electrodes);
+                                        if length(this_delta_dB_powerEv2)==sum((theseEvNosPerEl(evNo2,bwii,elec).groupNo==grNo))
+                                            this_delta_dB_powerEv2=this_delta_dB_powerEv2+(theseEvNosPerEl(evNo2,bwii,elec).this_delta_dB_powerEv((theseEvNosPerEl(evNo2,bwii,elec).groupNo==grNo))');
+                                            no_elects=no_elects+1;
+                                        end
                                     end
+                                    this_delta_dB_powerEv2=this_delta_dB_powerEv2/no_elects;
                                     
                                     roc_data(trials_in_event_Ev1+1:total_trials,1)=this_delta_dB_powerEv2;
                                     roc_data(trials_in_event_Ev1+1:total_trials,2)=ones(trials_in_event_Ev2,1);
@@ -9428,7 +10256,11 @@ switch which_display
                                     %Find  per electrode ROC
                                     if (trials_in_event_Ev1>=5)&(trials_in_event_Ev2>=5)
                                         per_mouse_no_ROCs=per_mouse_no_ROCs+1;
+                                        try
                                         roc=roc_calc(roc_data,0,0.05,0);
+                                        catch
+                                            pffft=1
+                                        end
                                         per_mouse_ROCout(per_mouse_no_ROCs).fileNo=handles_drgb.drgb.lfpevpair(lfpodNo_ref).fileNo;
                                         per_mouse_ROCbandwidth(per_mouse_no_ROCs)=bwii;
                                         per_mouse_ROCper_ii(per_mouse_no_ROCs)=per_ii;
@@ -9497,382 +10329,265 @@ switch which_display
         per_mouse_pFDRauROC=drsFDRpval(per_mouse_p_vals_ROC);
         fprintf(1, ['pFDR for per mouse auROC  = %d\n\n'],per_mouse_pFDRauROC);
         
-%         
-%         
-%         %Now plot the delta dB power per session per electrode
-%         for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
-%             %Plot the average
-%             
-%             try
-%                 close(bwii)
-%             catch
-%             end
-%             hFig=figure(bwii);
-%             set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
-%             
-%             
-%             set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
-%             hold on
-%             
-%             data_dB=[];
-%             events=[];
-%             groups=[];
-%             prof_naive=[];
-%             
-%             bar_lab_loc=[];
-%             no_ev_labels=0;
-%             ii_gr_included=0;
-%             
-%             for grNo=1:max(handles_drgb.drgbchoices.group_no)
-%                 
-%                 include_group=0;
-%                 
-%                 
-%                 for evNo=1:length(eventType)
-%                     
-%                     for per_ii=1:2      %performance bins. blue = naive, red = proficient
-%                         
-%                         if sum(eventType==3)>0
-%                             bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(evNo-1);
-%                         else
-%                             bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
-%                         end
-%                         
-%                         these_offsets(per_ii)=bar_offset;
-%                         
-%                         if sum((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo))>0
-%                             
-%                             include_group=1;
-%                             
-%                             if per_ii==1
-%                                 bar(bar_offset,mean(evNo_out(evNo).mean_delta_dB_powerEvperBW((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo),bwii)),'r','LineWidth', 3)
-%                             else
-%                                 bar(bar_offset,mean(evNo_out(evNo).mean_delta_dB_powerEvperBW((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo),bwii)),'b','LineWidth', 3)
-%                             end
-%                             plot(bar_offset,mean(evNo_out(evNo).mean_delta_dB_powerEvperBW((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo),bwii)),'ok','LineWidth', 3)
-%                             if sum((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo))>=2
-%                                 CI = bootci(1000, {@mean, evNo_out(evNo).mean_delta_dB_powerEvperBW((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo),bwii)},'type','cper');
-%                                 plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
-%                             end
-%                             plot((bar_offset)*ones(1,sum((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo))),...
-%                                 evNo_out(evNo).mean_delta_dB_powerEvperBW((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo),bwii),'o',...
-%                                 'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
-%                             
-%                             data_dB=[data_dB evNo_out(evNo).mean_delta_dB_powerEvperBW((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo),bwii)'];
-%                             events=[events evNo*ones(1,sum((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo)))];
-%                             groups=[grNo grNo*ones(1,sum((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo)))];
-%                             prof_naive=[prof_naive per_ii*ones(1,sum((evNo_out(evNo).per_ii==per_ii)&(evNo_out(evNo).groupNo==grNo)))];
-%                             
-%                         end
-%                         
-%                         
-%                     end
-%                     if include_group==1
-%                         bar_lab_loc=[bar_lab_loc mean(these_offsets)];
-%                         no_ev_labels=no_ev_labels+1;
-%                         if sum(eventType==3)>0
-%                             bar_labels{no_ev_labels}=evTypeLabels{evNo};
-%                         else
-%                             bar_labels{no_ev_labels}=num2str(concs(evNo));
-%                         end
-%                     end
-%                 end
-%                 if include_group==1
-%                     ii_gr_included=ii_gr_included+1;
-%                     groups_included(ii_gr_included)=grNo;
-%                 end
-%             end
-%             title([freq_names{bwii} ' average delta dB power per session, per electrode'])
-%             
-%             
-%             
-%             
-%             %Annotations identifying groups
-%             x_interval=0.8/ii_gr_included;
-%             for ii=1:ii_gr_included
-%                 annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.8 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
-%             end
-%             
-%             %Proficient/Naive annotations
-%             annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
-%             annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
-%             
-%             %x labels
-%             to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
-%             sorted_A=sortrows(to_sort);
-%             sorted_bar_lab_loc=sorted_A(:,1);
-%             for ii=1:length(bar_lab_loc)
-%                 sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
-%             end
-%             xticks(sorted_bar_lab_loc)
-%             xticklabels(sorted_bar_labels)
-%
-%             if sum(eventType==3)==0
-%
-%                 xlabel('Concentration (%)')
-%             end
-%
-%             ylabel('Delta power (dB)')
-%
-%
-%             %             %Calculate anovan for inteaction
-%             %             [p,tbl,stats]=anovan(data_MI,{prof_naive events groups},'varnames',{'proficient_vs_naive','within_vs_between','groups'},'display','off');
-%             %             fprintf(1, ['p value for anovan MI per session per electrode for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
-%             %             fprintf(1, ['p value for anovan MI per session per electrode for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
-%             %             fprintf(1, ['p value for anovan MI per session per electrode for groups for PAC theta/' freq_names{pacii+1} '= %d \n\n'],  p(3));
-%             %             %             p=anovan(data_dB,{spm});
-%         end
-%
-%Now plot the per mouse delta LFP power computed for each electrode
-pvals=[];
-for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
-    
-    %Plot the average
-    try
-        close(bwii)
-    catch
-    end
-    hFig=figure(bwii);
-    
-    set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
-    
-    set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
-    hold on
-    
-    data_delta_dB=[];
-    prof_naive=[];
-    events=[];
-    mice=[];
-    electrodes=[];
-    groups=[];
-    
-    bar_lab_loc=[];
-    no_ev_labels=0;
-    ii_gr_included=0;
-    
-    fprintf(1, ['\n\n'])
-    fprintf(1, ['ANOVAN for delta dB power per mouse per electrode, mouse as random factor\n\n'])
-    
-    
-    for grNo=1:max(handles_drgb.drgbchoices.group_no)
         
-        include_group=0;
-        
-        for evNo=1:length(eventType)
+        %Now plot the per mouse delta LFP power computed for each electrode
+        pvals=[];
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             
-            per_included=0;
-            these_dB_per_e=[];
-            for per_ii=1:2      %performance bins. blue = naive, red = proficient
-                
-                %bar_offset=21-evNo*3+(2-per_ii);
-                if sum(eventType==3)>0
-                    bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(evNo-1);
-                else
-                    bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
-                end
-                
-                these_offsets(per_ii)=bar_offset;
-                
-                if sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))>0
-                    
-                    include_group=1;
-                    
-                    per_included=per_included+1;
-                    
-                    if per_ii==1
-                        bar(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),'r','LineWidth', 3)
-                    else
-                        bar(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),'b','LineWidth', 3)
-                    end
-                    
-                    %Individual points; in the future add lines linking the
-                    %points?
-                    plot((bar_offset)*ones(1,sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),...
-                        delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)),'o',...
-                        'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
-                    data_for_lines(per_ii).these_dB_per_e(1:length(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))))=...
-                        delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo));
-                    data_for_lines(per_ii).these_mice(1:length(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))))=...
-                        delta_dB_mouseNo_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo));
-                    data_for_lines(per_ii).these_bar_offsets=bar_offset;
-                    
-                    
-                    %Average and CI
-                    plot(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),'ok','LineWidth', 3)
-                    if sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))>2
-                        CI = bootci(1000, {@mean, delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))},'type','cper');
-                        plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
-                    end
-                    
-                    %Save data for anovan
-                    data_delta_dB=[data_delta_dB delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
-                    prof_naive=[prof_naive per_ii*ones(1,sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))];
-                    events=[events evNo*ones(1,sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))];
-                    mice=[mice delta_dB_mouseNo_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
-                    electrodes=[electrodes delta_dB_electrode_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
-                    groups=[groups delta_dB_group_no_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
-                end
+            %Plot the average
+            try
+                close(bwii)
+            catch
             end
-            if per_included==2
-                for mouseNo=1:length(mouse_included)
-                    if mouse_included(mouseNo)==1
-                        if (sum(data_for_lines(1).these_mice==mouseNo)>0)&(sum(data_for_lines(2).these_mice==mouseNo)>0)
-                            plot([data_for_lines(1).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo)); data_for_lines(2).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo))],...
-                                [data_for_lines(1).these_dB_per_e(data_for_lines(1).these_mice==mouseNo); data_for_lines(2).these_dB_per_e(data_for_lines(2).these_mice==mouseNo)],'-','Color',[0.7 0.7 0.7])
-                        end
-                    end
-                end
-            end
-            if include_group==1
-                bar_lab_loc=[bar_lab_loc mean(these_offsets)];
-                no_ev_labels=no_ev_labels+1;
-                if sum(eventType==3)>0
-                    bar_labels{no_ev_labels}=evTypeLabels{evNo};
-                else
-                    bar_labels{no_ev_labels}=num2str(concs(evNo));
-                end
-            end
-        end
-        if include_group==1
-            ii_gr_included=ii_gr_included+1;
-            groups_included(ii_gr_included)=grNo;
-        end
-    end
-    
-    title([freq_names{bwii} ' average delta dB power per mouse, per electrode'])
-    
-    %Annotations identifying groups
-    x_interval=0.8/ii_gr_included;
-    for ii=1:ii_gr_included
-        annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.8 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
-    end
-    
-    %Proficient/Naive annotations
-    annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
-    annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
-    
-    %x labels
-    to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
-    sorted_A=sortrows(to_sort);
-    sorted_bar_lab_loc=sorted_A(:,1);
-    for ii=1:length(bar_lab_loc)
-        sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
-    end
-    xticks(sorted_bar_lab_loc)
-    xticklabels(sorted_bar_labels)
-    
-    if sum(eventType==3)==0
-        xlabel('Concentration (%)')
-    end
-    
-    ylabel('Delta power (dB)')
-    
-    
-    
-    %Calculate anovan for inteaction
-    [p,tbl,stats]=anovan(data_delta_dB,{prof_naive events mice electrodes},'varnames',{'proficient_vs_naive','events','groups','mice'},'display','off','random',4);
-    fprintf(1, ['p value for anovan delta dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
-    fprintf(1, ['p value for anovan delta dB power  per mouse per electrode for events ' freq_names{bwii} '= %d \n'],  p(2));
-    fprintf(1, ['p value for anovan delta dB power  per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(3));
-    
-    
-    %Plot the cumulative histos and do ranksum
-    %Plot the average
-    try
-        close(bwii+4)
-    catch
-    end
-    hFig=figure(bwii+4);
-    
-    set(hFig, 'units','normalized','position',[.1 .5 .4 .4])
-    
-    set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
-    
-    ii_rank=0;
-    dBpower_rank=[];
-    maxdB=-200;
-    mindB=200;
-    for evNo=1:length(eventType)
-        subplot(length(eventType),1,evNo)
-        hold on
-        
-        for grNo=1:max(handles_drgb.drgbchoices.group_no)
-            for per_ii=1:2      %performance bins. blue = naive, red = proficient
+            hFig=figure(bwii);
+            
+            set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            
+            set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+            hold on
+            
+            data_delta_dB=[];
+            prof_naive=[];
+            events=[];
+            mice=[];
+            electrodes=[];
+            groups=[];
+            
+            bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            fprintf(1, ['\n\n'])
+            fprintf(1, ['ANOVAN for delta dB power per mouse per electrode, mouse as random factor\n\n'])
+            
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
                 
+                include_group=0;
                 
-                
-                if sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))>0
+                for evNo=1:length(eventType)
                     
-                    
-                    if per_ii==1
-                        if grNo==1
-                            [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
-                            plot(x_aic,f_aic,'Color',[1 0 0],'LineWidth',3)
+                    per_included=0;
+                    these_dB_per_e=[];
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        %bar_offset=21-evNo*3+(2-per_ii);
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(evNo-1);
                         else
-                            [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
-                            plot(x_aic,f_aic,'Color',[0 0 1],'LineWidth',3)
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
                         end
-                    else
-                        if grNo==1
-                            [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
-                            plot(x_aic,f_aic,'Color',[1 0 0])
-                        else
-                            [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
-                            plot(x_aic,f_aic,'Color',[0 0 1])
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        if sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))>0
+                            
+                            include_group=1;
+                            
+                            per_included=per_included+1;
+                            
+                            if per_ii==1
+                                bar(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),'r','LineWidth', 3)
+                            else
+                                bar(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),'b','LineWidth', 3)
+                            end
+                            
+                            %Individual points; in the future add lines linking the
+                            %points?
+                            plot((bar_offset)*ones(1,sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),...
+                                delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)),'o',...
+                                'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                            data_for_lines(per_ii).these_dB_per_e(1:length(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))))=...
+                                delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo));
+                            data_for_lines(per_ii).these_mice(1:length(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))))=...
+                                delta_dB_mouseNo_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo));
+                            data_for_lines(per_ii).these_bar_offsets=bar_offset;
+                            
+                            
+                            %Average and CI
+                            plot(bar_offset,mean(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))),'ok','LineWidth', 3)
+                            if sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))>2
+                                CI = bootci(1000, {@mean, delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))},'type','cper');
+                                plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                            end
+                            
+                            %Save data for anovan
+                            data_delta_dB=[data_delta_dB delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
+                            prof_naive=[prof_naive per_ii*ones(1,sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))];
+                            events=[events evNo*ones(1,sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))];
+                            mice=[mice delta_dB_mouseNo_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
+                            electrodes=[electrodes delta_dB_electrode_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
+                            groups=[groups delta_dB_group_no_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))];
                         end
                     end
-                    
-                    
-                    
-                    %Save data for ranksum
-                    ii_rank=ii_rank+1;
-                    dBpower_rank(ii_rank).delta_dBpower=delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo));
-                    dBpower_rank(ii_rank).per_ii=per_ii;
-                    dBpower_rank(ii_rank).grNo=grNo;
-                    dBpower_rank(ii_rank).evNo=evNo;
-                    maxdB=max([maxdB max(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))]);
-                    mindB=min([mindB min(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))]);
+                    if per_included==2
+                        for mouseNo=1:length(mouse_included)
+                            if mouse_included(mouseNo)==1
+                                if (sum(data_for_lines(1).these_mice==mouseNo)>0)&(sum(data_for_lines(2).these_mice==mouseNo)>0)
+                                    try
+                                        plot([data_for_lines(1).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo)); data_for_lines(2).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo))],...
+                                            [data_for_lines(1).these_dB_per_e(data_for_lines(1).these_mice==mouseNo); data_for_lines(2).these_dB_per_e(data_for_lines(2).these_mice==mouseNo)],'-','Color',[0.7 0.7 0.7])
+                                    catch
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if include_group==1
+                        bar_lab_loc=[bar_lab_loc mean(these_offsets)];
+                        no_ev_labels=no_ev_labels+1;
+                        if sum(eventType==3)>0
+                            bar_labels{no_ev_labels}=evTypeLabels{evNo};
+                        else
+                            bar_labels{no_ev_labels}=num2str(concs(evNo));
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
                 end
             end
             
+            title([freq_names{bwii} ' average delta dB power per mouse, per electrode'])
+            
+            %Annotations identifying groups
+            x_interval=0.8/ii_gr_included;
+            for ii=1:ii_gr_included
+                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.8 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+            %x labels
+            to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+            sorted_A=sortrows(to_sort);
+            sorted_bar_lab_loc=sorted_A(:,1);
+            for ii=1:length(bar_lab_loc)
+                sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+            end
+            xticks(sorted_bar_lab_loc)
+            xticklabels(sorted_bar_labels)
+            
+            if sum(eventType==3)==0
+                xlabel('Concentration (%)')
+            end
+            
+            ylabel('Delta power (dB)')
+            
+            
+            
+            %Calculate anovan for inteaction
+            [p,tbl,stats]=anovan(data_delta_dB,{prof_naive events mice electrodes},'varnames',{'proficient_vs_naive','events','groups','mice'},'display','off','random',4);
+            fprintf(1, ['p value for anovan delta dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
+            fprintf(1, ['p value for anovan delta dB power  per mouse per electrode for events ' freq_names{bwii} '= %d \n'],  p(2));
+            fprintf(1, ['p value for anovan delta dB power  per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(3));
+            
+            
+            %Plot the cumulative histos and do ranksum
+            %Plot the average
+            try
+                close(bwii+4)
+            catch
+            end
+            hFig=figure(bwii+4);
+            
+            set(hFig, 'units','normalized','position',[.1 .5 .4 .4])
+            
+            set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+            
+            ii_rank=0;
+            dBpower_rank=[];
+            maxdB=-200;
+            mindB=200;
+            for evNo=1:length(eventType)
+                subplot(length(eventType),1,evNo)
+                hold on
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        
+                        if sum((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo))>0
+                            
+                            
+                            if per_ii==1
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0],'LineWidth',3)
+                                else
+                                    [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1],'LineWidth',3)
+                                end
+                            else
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0])
+                                else
+                                    [f_aic,x_aic] = drg_ecdf(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1])
+                                end
+                            end
+                            
+                            
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            dBpower_rank(ii_rank).delta_dBpower=delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo));
+                            dBpower_rank(ii_rank).per_ii=per_ii;
+                            dBpower_rank(ii_rank).grNo=grNo;
+                            dBpower_rank(ii_rank).evNo=evNo;
+                            maxdB=max([maxdB max(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))]);
+                            mindB=min([mindB min(delta_dB_per_mouse((delta_dB_perii_per_mouse==per_ii)&(delta_dB_evNo_per_mouse==evNo)&(delta_dB_bwii_per_mouse==bwii)&(delta_dB_group_no_per_mouse==grNo)))]);
+                        end
+                    end
+                    
+                end
+                legend([handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+                    [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                title([freq_names{bwii} ' delta dB power per mouse, per electrode for ' evTypeLabels{evNo}])
+                xlabel('delta power (dB)')
+                ylabel('Probability')
+            end
+            
+            for evNo=1:length(eventType)
+                subplot(length(eventType),1,evNo)
+                xlim([mindB-0.1*(maxdB-mindB) maxdB+0.1*(maxdB-mindB)])
+            end
+            
+            %Now do the ranksums
+            fprintf(1, ['Ranksum or t-test p values for delta dB power per electrode for ' freq_names{bwii} '\n'])
+            prof_naive_leg{1}='Proficient';
+            prof_naive_leg{2}='Naive';
+            for ii=1:ii_rank
+                for jj=ii+1:ii_rank
+                    [p, r_or_t]=drg_ranksum_or_ttest(dBpower_rank(ii).delta_dBpower,dBpower_rank(jj).delta_dBpower);
+                    if r_or_t==0
+                        fprintf(1, ['p value ranksum for ' handles_drgb.drgbchoices.group_no_names{dBpower_rank(ii).grNo} ' ' evTypeLabels{dBpower_rank(ii).evNo} ' ' prof_naive_leg{dBpower_rank(ii).per_ii} ' vs ' ...
+                            handles_drgb.drgbchoices.group_no_names{dBpower_rank(jj).grNo} ' ' evTypeLabels{dBpower_rank(jj).evNo} ' ' prof_naive_leg{dBpower_rank(jj).per_ii} ' =  %d\n'],p)
+                    else
+                        fprintf(1, ['p value t-test for ' handles_drgb.drgbchoices.group_no_names{dBpower_rank(ii).grNo} ' ' evTypeLabels{dBpower_rank(ii).evNo} ' ' prof_naive_leg{dBpower_rank(ii).per_ii} ' vs ' ...
+                            handles_drgb.drgbchoices.group_no_names{dBpower_rank(jj).grNo} ' ' evTypeLabels{dBpower_rank(jj).evNo} ' ' prof_naive_leg{dBpower_rank(jj).per_ii} ' =  %d\n'],p)
+                    end
+                    pvals=[pvals p];
+                end
+            end
+            fprintf(1, ['\n\n'])
+            
         end
-        legend([handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
-            [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
-        title([freq_names{bwii} ' delta dB power per mouse, per electrode for ' evTypeLabels{evNo}])
-        xlabel('delta power (dB)')
-        ylabel('Probability')
-    end
-    
-    for evNo=1:length(eventType)
-        subplot(length(eventType),1,evNo)
-        xlim([mindB-0.1*(maxdB-mindB) maxdB+0.1*(maxdB-mindB)])
-    end
-    
-    %Now do the ranksums
-    fprintf(1, ['Ranksum p values for delta dB power per electrode for ' freq_names{bwii} '\n'])
-    prof_naive_leg{1}='Proficient';
-    prof_naive_leg{2}='Naive';
-    for ii=1:ii_rank
-        for jj=ii+1:ii_rank
-            p=ranksum(dBpower_rank(ii).delta_dBpower,dBpower_rank(jj).delta_dBpower);
-            fprintf(1, ['p value for ' handles_drgb.drgbchoices.group_no_names{dBpower_rank(ii).grNo} ' ' evTypeLabels{dBpower_rank(ii).evNo} ' ' prof_naive_leg{dBpower_rank(ii).per_ii} ' vs ' ...
-                handles_drgb.drgbchoices.group_no_names{dBpower_rank(jj).grNo} ' ' evTypeLabels{dBpower_rank(jj).evNo} ' ' prof_naive_leg{dBpower_rank(jj).per_ii} ' =  %d\n'],p)
-            pvals=[pvals p];
-        end
-    end
-    fprintf(1, ['\n\n'])
-    
-end
-pFDR = drsFDRpval(pvals);
-fprintf(1, ['pFDR = %d \n\n'],pFDR)
-fprintf(1, ['\n\n'])
-
-%Now plot the histograms and the average per mouse LFP power
-%computed per mouse
-
-for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
-    %Plot the average
-    
+        pFDR = drsFDRpval(pvals);
+        fprintf(1, ['pFDR = %d \n\n'],pFDR)
+        fprintf(1, ['\n\n'])
+        
+        %Now plot the histograms and the average per mouse LFP power
+        %computed per mouse
+        
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
+            %Plot the average
+            
             try
                 close(bwii+8)
             catch
@@ -10012,7 +10727,7 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         fprintf(1, ['\n\n'])
         
         %Display the auROC for all trials per mouse (per electrode) for for concentrations separated by two log steps
-        for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             %Plot the average
             
             try
@@ -10182,7 +10897,7 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         %This only works for Daniel's NRG, we have to modify in the future
         pvals=[];
         if sum(eventType==3)>0
-            for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+            for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
                 %Plot the average
                 
                 try
@@ -10252,210 +10967,35 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
                 ylabel('Cumulative probability')
                 
                 %Now do the ranksums
-                fprintf(1, ['Ranksum p values for ' freq_names{bwii} '\n'])
+                fprintf(1, ['Ranksum or t-test p values for ' freq_names{bwii} '\n'])
                 prof_naive_leg{1}='Proficient';
                 prof_naive_leg{2}='Naive';
                 for ii=1:ii_rank
                     for jj=ii+1:ii_rank
-                        p=ranksum(ranksum_auROC(ii).auROC,ranksum_auROC(jj).auROC);
-                        fprintf(1, ['p value for ' handles_drgb.drgbchoices.group_no_names{ranksum_auROC(ii).grNo} ' ' prof_naive_leg{ranksum_auROC(ii).per_ii} ' vs ' ...
-                             handles_drgb.drgbchoices.group_no_names{ranksum_auROC(jj).grNo} ' ' prof_naive_leg{ranksum_auROC(jj).per_ii} ' =  %d\n'],p)
+                        [p, r_or_t]=drg_ranksum_or_ttest(ranksum_auROC(ii).auROC,ranksum_auROC(jj).auROC);
+                        if r_or_t==0
+                            fprintf(1, ['p value ranksum for ' handles_drgb.drgbchoices.group_no_names{ranksum_auROC(ii).grNo} ' ' prof_naive_leg{ranksum_auROC(ii).per_ii} ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_auROC(jj).grNo} ' ' prof_naive_leg{ranksum_auROC(jj).per_ii} ' =  %d\n'],p)
+                        else
+                            fprintf(1, ['p value t-test for ' handles_drgb.drgbchoices.group_no_names{ranksum_auROC(ii).grNo} ' ' prof_naive_leg{ranksum_auROC(ii).per_ii} ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_auROC(jj).grNo} ' ' prof_naive_leg{ranksum_auROC(jj).per_ii} ' =  %d\n'],p)
+                        end
                         pvals=[pvals p];
                     end
                 end
                 fprintf(1, ['\n\n'])
-
+                
             end
         end
         fprintf(1, ['\n\n'])
         pFDR = drsFDRpval(pvals);
-          fprintf(1, ['pFDR = %d \n\n'],pFDR)
+        fprintf(1, ['pFDR = %d \n\n'],pFDR)
         
-%         save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
+        
+        pffft=1;
         
         
     case 21
-        %Justin's per mouse auROC analysis for LFP power
-        %For the proficient mice in the first and last sessions
-        %plot the LFP spectrum for S+ vs S-, plot LFP power for S+ vs S- for each electrode and plot auROCs
-        %NOTE: This does the analysis in all the files and DOES not distinguish between groups!!!
-        
-        timecourse=[];
-        time_points=0;
-         
-        
-        fprintf(1, ['Timecourse for delta power dB\n\n'])
-        
-        no_files=max(files);
-        
-        if exist('which_electrodes')==0
-            which_electrodes=[1:16];
-        end
-        
-        
-        for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
-            
-            
-            for elec=1:16
-                if sum(which_electrodes==elec)>0
-                    
-                    trials_per_mouse=0;
-                    mouse_has_files=0;
-                    
-                    for fileNo=1:no_files
-                        if sum(files==fileNo)>0
-                            
-                            if handles_drgb.drgbchoices.mouse_no(fileNo)==mouseNo
-
-                                lfpodNo_ref=find((files_per_lfp==fileNo)&(elec_per_lfp==elec)&(window_per_lfp==refWin));
-                                
-                                if (~isempty(handles_drgb.drgb.lfpevpair(lfpodNo_ref)))
-                                    
-                                    
-                                    if (~isempty(handles_drgb.drgb.lfpevpair(lfpodNo_ref).allPower))
-                                        
-                                        
-                                        lfpodNo=find((files_per_lfp==fileNo)&(elec_per_lfp==elec)&(window_per_lfp==winNo));
-                                        
-                                        %Save percent correct
-                                        szallPower=size(handles_drgb.drgb.lfpevpair(lfpodNo_ref).allPower);
-                                        no_of_trials=szallPower(1);
-                                        no_freqs=szallPower(2);
-                                        
-                                        timecourse.perCorr(time_points+1:time_points+no_of_trials)=handles_drgb.drgb.lfpevpair(lfpodNo_ref).perCorrLFPPower;
-                                        timecourse.fileNo(time_points+1:time_points+no_of_trials)=fileNo*ones(1,no_of_trials);
-                                        timecourse.mouseNo(time_points+1:time_points+no_of_trials)=mouseNo*ones(1,no_of_trials);
-                                        timecourse.elec(time_points+1:time_points+no_of_trials)=elec*ones(1,no_of_trials);
-                                        timecourse.trial_no_per_mouse(time_points+1:time_points+no_of_trials)=[trials_per_mouse+1:trials_per_mouse+no_of_trials];
-                                        
-                                        %Save events
-                                        sz_which_eventLFPPower=size(handles_drgb.drgb.lfpevpair(lfpodNo_ref).which_eventLFPPower);
-                                        no_events=sz_which_eventLFPPower(1);
-                                        timecourse.which_eventLFPPower(1:no_events,time_points+1:time_points+no_of_trials)=handles_drgb.drgb.lfpevpair(lfpodNo_ref).which_eventLFPPower;
-                                        
-                                        
-                                        
-                                        %Calculate dB delta power
-                                        this_dB_powerref=zeros(no_of_trials,length(frequency));
-                                        this_dB_powerref(:,:)=10*log10(handles_drgb.drgb.lfpevpair(lfpodNo_ref).allPower);
-                                        
-                                        
-                                        this_dB_power=zeros(no_of_trials,length(frequency));
-                                        this_dB_power(:,:)=10*log10(handles_drgb.drgb.lfpevpair(lfpodNo).allPower);
-                                        
-                                        %Do per bandwidth analysis
-                                        for bwii=1:no_bandwidths
-                                            
-                                            this_band=(frequency>=low_freq(bwii))&(frequency<=high_freq(bwii));
-                                            
-                                            %Enter the  Ev1
-                                            this_delta_dB_power=zeros(no_of_trials,1);
-                                            this_delta_dB_power=mean(this_dB_power(:,this_band)-this_dB_powerref(:,this_band),2);
-                                            timecourse.delta_dB_power(bwii,time_points+1:time_points+no_of_trials)=this_delta_dB_power;
-                                            mouse_has_files=1;
-                                        end
-                                        
-                                        time_points=time_points+no_of_trials;
-                                        trials_per_mouse=trials_per_mouse+no_of_trials;
-                                        
-                                        fprintf(1, ['%d trials succesfully processed for file No %d electrode %d\n'],no_of_trials,fileNo,elec);
-                                        
-                                    else
-                                        
-                                        fprintf(1, ['Empty allPower for file No %d electrode %d\n'],fileNo,elec);
-                                        
-                                    end
-                                    
-                                    
-                                else
-                                    fprintf(1, ['Empty lfpevpair for file No %d electrode %d\n'],fileNo,elec);
-                                    
-                                    
-                                end
-                            end %if mouseNo
-                        end
-                    end %fileNo
-                    
-   
-                end
-                
-            end %elec
-            
-            if mouse_has_files==1
-                mice_with_files(mouseNo)=1;
-            else
-                mice_with_files(mouseNo)=0;
-            end
-            
-            pffft=1;  
-        end %mouseNo
-        
-        figNo=0;
-        for bwii=1:4
-            figNo=figNo+1;
-            try
-                close(figNo)
-            catch
-            end
-        end
-        
-        no_subplots=0;
-        
-        for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
-            
-            if mice_with_files(mouseNo)==1
-                no_subplots=no_subplots+1;
-                figNo=0;
-                for bwii=1:4
-                    figNo=figNo+1;
-                    hFig1=figure(figNo);
-                    set(hFig1, 'units','normalized','position',[.1 .1 .75 .75])
-                    
-                    subplot(sum(mice_with_files),1,no_subplots)
-                    
-                    hold on
-                    for evNo=1:length(eventType)
-                        no_elec=0;
-                        
-                        for elec=1:16
-                            if sum(which_electrodes==elec)>0
-                                no_elec=no_elec+1;
-                             
-                                these_trials=[];
-                                these_trials=(timecourse.mouseNo==mouseNo)&(timecourse.elec==elec)&(timecourse.which_eventLFPPower(eventType(evNo),:)==1);
-                                this_deltadB=[];
-                                this_deltadB=timecourse.delta_dB_power(these_trials);
-                                trial_numbers=[];
-                                trial_numbers=timecourse.trial_no_per_mouse(these_trials);
-                                plot(trial_numbers,this_deltadB,'.','MarkerFaceColor',these_light_colors{evNo},'MarkerEdgeColor',these_light_colors{evNo},'LineStyle','none')
-                                
-                                if no_elec==1
-                                    cum_this_deltadB=[];
-                                    cum_this_deltadB=this_deltadB;
-                                else
-                                    cum_this_deltadB=cum_this_deltadB+this_deltadB;
-                                end
-                            end
-                        end
-                        mean_this_deltadB=[];
-                        mean_this_deltadB=cum_this_deltadB/no_elec;
-                        plot(trial_numbers,mean_this_deltadB,'o','MarkerFaceColor',these_colors{evNo},'MarkerEdgeColor',these_colors{evNo},...
-                            'MarkerSize',5,'LineStyle','none')
-                        
-                        
-                        
-                        
-                    end
-                    title(['Timecourse for delta dB power for mouse No ' num2str(mouseNo)])
-                    xlabel('Trial No')
-                    ylabel('dB')
-                    
-                end
-            end
-        end
-        pffft=1
-         
-    case 22
         % Multiclass ROC analysis of coherence for naive and proficient
         % mice for different epochs (concentrations or S+ vs. S-) and different groups. Analyzed per mouse
         
@@ -10465,13 +11005,13 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         per_mouse_no_ROCs=0;
         per_mouse_ROCout=[];
         per_mouse_p_vals_ROC=[];
-%         deltaCxy_Ev1=[];
-%         no_Ev1=0;
+        %         deltaCxy_Ev1=[];
+        %         no_Ev1=0;
         for evNo=1:length(eventType)
             evNo_out(evNo).noWB=0;
         end
-%         deltaCxy_Ev1WB=[];
-%         deltaCxy_Ev2WB=[];
+        %         deltaCxy_Ev1WB=[];
+        %         deltaCxy_Ev2WB=[];
         deltaCxy_No_per_mouse=0;
         deltaCxy_per_mouse=[];
         deltaCxy_perii_per_mouse=[];
@@ -10484,11 +11024,11 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         
         
         fprintf(1, ['Pairwise auROC analysis for coherence analysis of LFP\n\n'])
-%         p_vals=[];
+        %         p_vals=[];
         no_files=max(files);
         
-
-%         no_ROCs=0;
+        
+        %         no_ROCs=0;
         szpc=size(percent_windows);
         for per_ii=1:szpc(1)
             
@@ -10496,7 +11036,7 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
                 mouse_has_files=0;
                 theseEvNosPerEl=[];
                 for evNo=1:length(eventType)
-                    for bwii=1:4
+                    for bwii=1:no_bandwidths
                         for elec=1:16
                             theseEvNosPerEl(evNo,bwii,elec).noEv=0;
                         end
@@ -10504,146 +11044,146 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
                 end
                 
                 for elec_pair=1:max(elec_pair_No)
- 
-                        theseEvNos=[];
-                        for evNo=1:length(eventType)
-                            for bwii=1:4
-                                theseEvNos(evNo,bwii).noEv=0;
-                            end
+                    
+                    theseEvNos=[];
+                    for evNo=1:length(eventType)
+                        for bwii=1:no_bandwidths
+                            theseEvNos(evNo,bwii).noEv=0;
                         end
-                        
-                        this_file_is_nan=0;
-                        for fileNo=1:no_files
-                            if sum(files==fileNo)>0
-                                if handles_drgb.drgbchoices.mouse_no(fileNo)==mouseNo
-                                        group_no_per_mouse(mouseNo)=handles_drgb.drgbchoices.group_no(fileNo);
-                                        lfppairNo=find((files_per_lfp==fileNo)&(elec_pair_No==elec_pair)&(window_per_lfp==winNo));
-                                        lfppairNo_ref=find((files_per_lfp==fileNo)&(elec_pair_No==elec_pair)&(window_per_lfp==refWin));
+                    end
+                    
+                    this_file_is_nan=0;
+                    for fileNo=1:no_files
+                        if sum(files==fileNo)>0
+                            if handles_drgb.drgbchoices.mouse_no(fileNo)==mouseNo
+                                group_no_per_mouse(mouseNo)=handles_drgb.drgbchoices.group_no(fileNo);
+                                lfppairNo=find((files_per_lfp==fileNo)&(elec_pair_No==elec_pair)&(window_per_lfp==winNo));
+                                lfppairNo_ref=find((files_per_lfp==fileNo)&(elec_pair_No==elec_pair)&(window_per_lfp==refWin));
+                                
+                                if (~isempty(handles_drgb.drgb.lfpevpair(lfppairNo).all_Cxy_timecourse))&(~isempty(handles_drgb.drgb.lfpevpair(lfppairNo_ref).all_Cxy_timecourse))
+                                    
+                                    percent_mask=[];
+                                    percent_mask=logical((handles_drgb.drgb.lfpevpair(lfppairNo).perCorrCoh>=percent_windows(per_ii,1))...
+                                        &(handles_drgb.drgb.lfpevpair(lfppairNo).perCorrCoh<=percent_windows(per_ii,2)));
+                                    
+                                    
+                                    for evNo=1:length(eventType)
                                         
-                                        if (~isempty(handles_drgb.drgb.lfpevpair(lfppairNo).all_Cxy_timecourse))&(~isempty(handles_drgb.drgb.lfpevpair(lfppairNo_ref).all_Cxy_timecourse))
+                                        noWB_for_evNo(evNo)=-1;
+                                        
+                                        trials_in_event_refEv=[];
+                                        trials_in_event_refEv=(handles_drgb.drgb.lfpevpair(lfppairNo_ref).which_event_coh(eventType(evNo),:)==1)&percent_mask;
+                                        
+                                        
+                                        trials_in_event_Ev=[];
+                                        trials_in_event_Ev=(handles_drgb.drgb.lfpevpair(lfppairNo).which_event_coh(eventType(evNo),:)==1)&percent_mask;
+                                        
+                                        if (sum(trials_in_event_Ev)>=1)
                                             
-                                            percent_mask=[];
-                                            percent_mask=(handles_drgb.drgb.lfpevpair(lfppairNo).perCorrCoh>=percent_windows(per_ii,1))...
-                                                &(handles_drgb.drgb.lfpevpair(lfppairNo).perCorrCoh<=percent_windows(per_ii,2));
                                             
                                             
-                                            for evNo=1:length(eventType)
+                                            % Ev1
+                                            this_deltaCxy=zeros(sum(trials_in_event_Ev),length(frequency));
+                                            this_deltaCxy(:,:)=mean(handles_drgb.drgb.lfpevpair(lfppairNo).all_Cxy_timecourse(trials_in_event_Ev,:,:)...
+                                                -handles_drgb.drgb.lfpevpair(lfppairNo_ref).all_Cxy_timecourse(trials_in_event_Ev,:,:),3);
+                                            
+                                            if sum(isnan(this_deltaCxy))>0
+                                                this_file_is_nan=1;
+                                            end
+                                            
+                                            this_Cxy=zeros(sum(trials_in_event_Ev),length(frequency));
+                                            this_Cxy(:,:)=mean(handles_drgb.drgb.lfpevpair(lfppairNo_ref).all_Cxy_timecourse(trials_in_event_Ev,:,:),3);
+                                            
+                                            
+                                            %Wide band spectrum
+                                            evNo_out(evNo).noWB=evNo_out(evNo).noWB+1;
+                                            evNo_out(evNo).deltaCxy_EvWB(evNo_out(evNo).noWB,1:length(frequency))=mean(this_deltaCxy,1);
+                                            evNo_out(evNo).per_ii(evNo_out(evNo).noWB)=per_ii;
+                                            evNo_out(evNo).groupNo(evNo_out(evNo).noWB)=handles_drgb.drgbchoices.group_no(fileNo);
+                                            
+                                            noWB_for_evNo(evNo)=evNo_out(evNo).noWB;
+                                            
+                                            
+                                            %Do per bandwidth analysis
+                                            for bwii=1:no_bandwidths
                                                 
-                                                noWB_for_evNo(evNo)=-1;
-                                                 
-                                                trials_in_event_refEv=[];
-                                                trials_in_event_refEv=(handles_drgb.drgb.lfpevpair(lfppairNo_ref).which_event_coh(eventType(evNo),:)==1)&percent_mask;
+                                                this_band=(frequency>=low_freq(bwii))&(frequency<=high_freq(bwii));
                                                 
+                                                %Enter the  Ev1
+                                                this_deltaCxy_Ev=zeros(sum(trials_in_event_Ev),1);
+                                                this_deltaCxy_Ev=mean(this_deltaCxy(:,this_band),2);
                                                 
-                                                trials_in_event_Ev=[];
-                                                trials_in_event_Ev=(handles_drgb.drgb.lfpevpair(lfppairNo).which_event_coh(eventType(evNo),:)==1)&percent_mask;
+                                                theseEvNos(evNo,bwii).this_deltaCxy_Ev(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=this_deltaCxy_Ev';
+                                                %                                                         theseEvNos(evNo,bwii).noEv=theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev);
                                                 
-                                                if (sum(trials_in_event_Ev)>=1)
-                                                    
-                                                   
-                                                     
-                                                    % Ev1
-                                                    this_deltaCxy=zeros(sum(trials_in_event_Ev),length(frequency));
-                                                    this_deltaCxy(:,:)=mean(handles_drgb.drgb.lfpevpair(lfppairNo).all_Cxy_timecourse(trials_in_event_Ev,:,:)...
-                                                        -handles_drgb.drgb.lfpevpair(lfppairNo_ref).all_Cxy_timecourse(trials_in_event_Ev,:,:),3);
-                                                    
-                                                    if sum(isnan(this_deltaCxy))>0
-                                                        this_file_is_nan=1;
-                                                    end
-                                                    
-                                                    this_Cxy=zeros(sum(trials_in_event_Ev),length(frequency));
-                                                    this_Cxy(:,:)=mean(handles_drgb.drgb.lfpevpair(lfppairNo_ref).all_Cxy_timecourse(trials_in_event_Ev,:,:),3);
-                                                    
-                                                    
-                                                    %Wide band spectrum
-                                                    evNo_out(evNo).noWB=evNo_out(evNo).noWB+1;
-                                                    evNo_out(evNo).deltaCxy_EvWB(evNo_out(evNo).noWB,1:length(frequency))=mean(this_deltaCxy,1);
-                                                    evNo_out(evNo).per_ii(evNo_out(evNo).noWB)=per_ii;
-                                                    evNo_out(evNo).groupNo(evNo_out(evNo).noWB)=handles_drgb.drgbchoices.group_no(fileNo);
-                                                    
-                                                    noWB_for_evNo(evNo)=evNo_out(evNo).noWB;
-                                                    
-                                                    
-                                                    %Do per bandwidth analysis
-                                                    for bwii=1:no_bandwidths
-                                                        
-                                                        this_band=(frequency>=low_freq(bwii))&(frequency<=high_freq(bwii));
-                                                        
-                                                        %Enter the  Ev1
-                                                        this_deltaCxy_Ev=zeros(sum(trials_in_event_Ev),1);
-                                                        this_deltaCxy_Ev=mean(this_deltaCxy(:,this_band),2);
-                                                        
-                                                        theseEvNos(evNo,bwii).this_deltaCxy_Ev(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=this_deltaCxy_Ev';
-%                                                         theseEvNos(evNo,bwii).noEv=theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev);
-                                                        
-                                                        %Enter the  Ev1
-                                                        this_Cxy_Ev=zeros(sum(trials_in_event_Ev),1);
-                                                        this_Cxy_Ev=mean(this_Cxy(:,this_band),2);
-                                                        
-                                                        theseEvNos(evNo,bwii).this_Cxy_Ev(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=this_Cxy_Ev';
-                                                        theseEvNos(evNo,bwii).groupNo(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=handles_drgb.drgbchoices.group_no(fileNo)*ones(1,sum(trials_in_event_Ev));
-                                                        theseEvNos(evNo,bwii).noEv=theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev);
-                                                        
-                                                        mouse_has_files=1;
-                                                    end
-                                                    
-                                                    
-                                                    fprintf(1, ['%d trials in event No %d succesfully processed for file No %d electrode pair %d\n'],sum(trials_in_event_Ev), evNo,fileNo,elec_pair);
-                                                    
-                                                else
-                                                    
-                                                    
-                                                    fprintf(1, ['%d trials in event No %d fewer than minimum trials per event ' evTypeLabels{evNo} ' for file No %d electrode pair %d\n'],sum(trials_in_event_Ev), min_trials_per_event,fileNo,elec_pair);
-                                                    
-                                                    
-                                                end
+                                                %Enter the  Ev1
+                                                this_Cxy_Ev=zeros(sum(trials_in_event_Ev),1);
+                                                this_Cxy_Ev=mean(this_Cxy(:,this_band),2);
                                                 
+                                                theseEvNos(evNo,bwii).this_Cxy_Ev(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=this_Cxy_Ev';
+                                                theseEvNos(evNo,bwii).groupNo(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=handles_drgb.drgbchoices.group_no(fileNo)*ones(1,sum(trials_in_event_Ev));
+                                                theseEvNos(evNo,bwii).noEv=theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev);
                                                 
+                                                mouse_has_files=1;
                                             end
                                             
                                             
+                                            fprintf(1, ['%d trials in event No %d succesfully processed for file No %d electrode pair %d\n'],sum(trials_in_event_Ev), evNo,fileNo,elec_pair);
+                                            
                                         else
                                             
-                                            fprintf(1, ['Empty allPower for file No %d electrode %d\n'],fileNo,elec_pair);
+                                            
+                                            fprintf(1, ['%d trials in event No %d fewer than minimum trials per event ' evTypeLabels{evNo} ' for file No %d electrode pair %d\n'],sum(trials_in_event_Ev), min_trials_per_event,fileNo,elec_pair);
+                                            
                                             
                                         end
-           
-                                 
-                                end %if mouseNo
-                            end
-                        end %fileNo
-                        
-                        if this_file_is_nan==1
-                            fprintf(1, ['WARNING file No %d has NaN delta Cxy\n\n'])
-                        end
-                        
-                        if theseEvNos(evNo,1).noEv>0
-                            if mouse_has_files==1
-                                mouse_included(mouseNo)=1;
-                                %Calculate per mouse per electrode delta_dB
-                                for evNo=1:length(eventType)
-                                    for bwii=1:4
-                                        if theseEvNos(evNo,bwii).noEv>0
-                                            deltaCxy_No_per_mouse=deltaCxy_No_per_mouse+1;
-                                            deltaCxy_per_mouse(deltaCxy_No_per_mouse)=mean(theseEvNos(evNo,bwii).this_deltaCxy_Ev);
-                                            Cxy_per_mouse(deltaCxy_No_per_mouse)=mean(theseEvNos(evNo,bwii).this_Cxy_Ev);
-                                            deltaCxy_perii_per_mouse(deltaCxy_No_per_mouse)=per_ii;
-                                            deltaCxy_evNo_per_mouse(deltaCxy_No_per_mouse)=evNo;
-                                            deltaCxy_bwii_per_mouse(deltaCxy_No_per_mouse)=bwii;
-                                            deltaCxy_mouseNo_per_mouse(deltaCxy_No_per_mouse)=mouseNo;
-                                            deltaCxy_elec_pair_per_mouse(deltaCxy_No_per_mouse)=elec_pair;
-                                            deltaCxy_group_no_per_mouse(deltaCxy_No_per_mouse)=group_no_per_mouse(mouseNo);
-                                        end
+                                        
+                                        
                                     end
-                                end 
-                            else
-                                mouse_included(mouseNo)=0;
-                            end
+                                    
+                                    
+                                else
+                                    
+                                    fprintf(1, ['Empty allPower for file No %d electrode %d\n'],fileNo,elec_pair);
+                                    
+                                end
+                                
+                                
+                            end %if mouseNo
                         end
+                    end %fileNo
+                    
+                    if this_file_is_nan==1
+                        fprintf(1, ['WARNING file No %d has NaN delta Cxy\n\n'])
+                    end
+                    
+                    if theseEvNos(evNo,1).noEv>0
+                        if mouse_has_files==1
+                            mouse_included(mouseNo)=1;
+                            %Calculate per mouse per electrode delta_dB
+                            for evNo=1:length(eventType)
+                                for bwii=1:no_bandwidths
+                                    if theseEvNos(evNo,bwii).noEv>0
+                                        deltaCxy_No_per_mouse=deltaCxy_No_per_mouse+1;
+                                        deltaCxy_per_mouse(deltaCxy_No_per_mouse)=mean(theseEvNos(evNo,bwii).this_deltaCxy_Ev);
+                                        Cxy_per_mouse(deltaCxy_No_per_mouse)=mean(theseEvNos(evNo,bwii).this_Cxy_Ev);
+                                        deltaCxy_perii_per_mouse(deltaCxy_No_per_mouse)=per_ii;
+                                        deltaCxy_evNo_per_mouse(deltaCxy_No_per_mouse)=evNo;
+                                        deltaCxy_bwii_per_mouse(deltaCxy_No_per_mouse)=bwii;
+                                        deltaCxy_mouseNo_per_mouse(deltaCxy_No_per_mouse)=mouseNo;
+                                        deltaCxy_elec_pair_per_mouse(deltaCxy_No_per_mouse)=elec_pair;
+                                        deltaCxy_group_no_per_mouse(deltaCxy_No_per_mouse)=group_no_per_mouse(mouseNo);
+                                    end
+                                end
+                            end
+                        else
+                            mouse_included(mouseNo)=0;
+                        end
+                    end
                 end
                 
                 
-
+                
                 if mouse_has_files==1
                     mouse_included(mouseNo)=1;
                 else
@@ -10662,9 +11202,9 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         per_mouse_pFDRauROC=drsFDRpval(per_mouse_p_vals_ROC);
         fprintf(1, ['pFDR for per mouse auROC  = %d\n\n'],per_mouse_pFDRauROC);
         
-
-        %Now plot the average per electrode, all sessions for each mouse 
-        for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+        
+        %Now plot the average per electrode, all sessions for each mouse
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             %Plot the average
             
             try
@@ -10724,7 +11264,7 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
                             else
                                 bar(bar_offset,mean(deltaCxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo))),'b','LineWidth', 3)
                             end
-                             
+                            
                             %Individual points; in the future add lines linking the
                             %points?
                             plot((bar_offset)*ones(1,sum((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo))),...
@@ -10751,7 +11291,7 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
                             mice=[mice deltaCxy_mouseNo_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo))];
                             electrodes=[electrodes deltaCxy_elec_pair_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo))];
                             groups=[groups deltaCxy_group_no_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo))];
-                           
+                            
                         end
                     end
                     
@@ -10820,7 +11360,7 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
             fprintf(1, ['p value for anovan delta dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
             fprintf(1, ['p value for anovan delta dB power  per mouse per electrode for events ' freq_names{bwii} '= %d \n'],  p(2));
             fprintf(1, ['p value for anovan delta dB power  per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(3));
-             
+            
             
             
         end
@@ -10836,126 +11376,126 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         %I do not think repeated measures anova is granted here. I am
         %commenting this out
         
-     
-%         
-%         for bwii=1:4
-%             
-%             fprintf(1, ['Repeated measures anova for delta coherence during odor' freq_names{bwii} '\n\n'])
-%             
-%             %For all the condiitons setup the table
-%             kk=0;
-%             mouse_col=[];
-%             naive_proficient_col=[];
-%             event_col=[];
-%             group_col=[];
-%             deltaCxy_cols=[];
-%             Cxy_cols=[];
-%             for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
-%                 
-%                 
-%                 
-%                 for evNo=1:length(eventType)
-%                     
-%                     
-%                     for per_ii=1:2
-%                         
-%                         
-%                         this_ii=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo)&(deltaCxy_elec_pair_per_mouse==1);
-%                         these_elecs=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo);
-%                         
-%                         if sum(this_ii)>0
-%                             kk=kk+1;
-%                             
-%                             mouse_col(kk,1)=deltaCxy_mouseNo_per_mouse(this_ii);
-%                             naive_proficient_col(kk,1)=deltaCxy_perii_per_mouse(this_ii);
-%                             event_col(kk,1)=deltaCxy_evNo_per_mouse(this_ii);
-%                             group_col(kk,1)=deltaCxy_group_no_per_mouse(this_ii);
-%                             deltaCxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=deltaCxy_per_mouse(these_elecs);
-%                             Cxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=Cxy_per_mouse(these_elecs);
-%                         end
-%                     end
-%                 end
-%                 
-%             end
-%             
-%             t = table(group_col,naive_proficient_col,event_col,mouse_col,deltaCxy_cols(:,1),deltaCxy_cols(:,2),...
-%                 deltaCxy_cols(:,3),deltaCxy_cols(:,4),deltaCxy_cols(:,5),deltaCxy_cols(:,6),deltaCxy_cols(:,7),deltaCxy_cols(:,8),...
-%                 deltaCxy_cols(:,9),deltaCxy_cols(:,10),deltaCxy_cols(:,11),deltaCxy_cols(:,12),deltaCxy_cols(:,13),deltaCxy_cols(:,14),...
-%                 deltaCxy_cols(:,15),deltaCxy_cols(:,16),...
-%                 'VariableNames',{'Genotype','Proficiency','Event','Mouse','deltaCxy1','deltaCxy2',...
-%                 'deltaCxy3','deltaCxy4','deltaCxy5','deltaCxy6','deltaCxy7','deltaCxy8','deltaCxy9','deltaCxy10',...
-%                 'deltaCxy11','deltaCxy12','deltaCxy13','deltaCxy14','deltaCxy15','deltaCxy16'});
-%             electrode_pairs=[1:16]'; %these are the electrode pairs
-%             rm = fitrm(t,'deltaCxy1-deltaCxy16 ~ Genotype + Proficiency + Event + Mouse','WithinDesign',electrode_pairs)
-%             
-%             % Perform repeated measures analysis of variance.
-% %             ranovatbl = ranova(rm)
-%             anovatbl=anova(rm,'WithinModel',electrode_pairs)
-%             fprintf(1, '\n\n\n\n')
-%         end
-%         
-%        
-%         
-%         for bwii=1:4
-%             
-%             fprintf(1, ['Repeated measures anova for coherence before the odor ' freq_names{bwii} '\n\n'])
-%             
-%             %For all the condiitons setup the table
-%             kk=0;
-%             mouse_col=[];
-%             naive_proficient_col=[];
-%             event_col=[];
-%             group_col=[];
-%             deltaCxy_cols=[];
-%             Cxy_cols=[];
-%             for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
-%                 
-%                 
-%                 
-%                 for evNo=1:length(eventType)
-%                     
-%                     
-%                     for per_ii=1:2
-%                         
-%                         
-%                         this_ii=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo)&(deltaCxy_elec_pair_per_mouse==1);
-%                         these_elecs=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo);
-%                         
-%                         if sum(this_ii)>0
-%                             kk=kk+1;
-%                             
-%                             mouse_col(kk,1)=deltaCxy_mouseNo_per_mouse(this_ii);
-%                             naive_proficient_col(kk,1)=deltaCxy_perii_per_mouse(this_ii);
-%                             event_col(kk,1)=deltaCxy_evNo_per_mouse(this_ii);
-%                             group_col(kk,1)=deltaCxy_group_no_per_mouse(this_ii);
-%                             deltaCxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=deltaCxy_per_mouse(these_elecs);
-%                             Cxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=Cxy_per_mouse(these_elecs);
-%                         end
-%                     end
-%                 end
-%                 
-%             end
-%             
-%             t = table(group_col,naive_proficient_col,event_col,mouse_col,Cxy_cols(:,1),Cxy_cols(:,2),...
-%                 Cxy_cols(:,3),Cxy_cols(:,4),Cxy_cols(:,5),Cxy_cols(:,6),Cxy_cols(:,7),Cxy_cols(:,8),...
-%                 Cxy_cols(:,9),Cxy_cols(:,10),Cxy_cols(:,11),Cxy_cols(:,12),Cxy_cols(:,13),Cxy_cols(:,14),...
-%                 Cxy_cols(:,15),Cxy_cols(:,16),...
-%                 'VariableNames',{'Genotype','Proficiency','Event','Mouse','Cxy1','Cxy2',...
-%                 'Cxy3','Cxy4','Cxy5','Cxy6','Cxy7','Cxy8','Cxy9','Cxy10',...
-%                 'Cxy11','Cxy12','Cxy13','Cxy14','Cxy15','Cxy16'});
-%             electrode_pairs=[1:16]'; %these are the electrode pairs
-%             rm = fitrm(t,'Cxy1-Cxy16 ~ Genotype + Proficiency + Event + Mouse','WithinDesign',electrode_pairs)
-%             % Perform repeated measures analysis of variance.
-% %             ranovatbl = ranova(rm)
-%             anovatbl=anova(rm,'WithinModel',electrode_pairs)
-%             fprintf(1, '\n\n\n\n')
-%         end
-%        
-%        
         
-      
+        %
+        %         for bwii=1:no_bandwidths
+        %
+        %             fprintf(1, ['Repeated measures anova for delta coherence during odor' freq_names{bwii} '\n\n'])
+        %
+        %             %For all the condiitons setup the table
+        %             kk=0;
+        %             mouse_col=[];
+        %             naive_proficient_col=[];
+        %             event_col=[];
+        %             group_col=[];
+        %             deltaCxy_cols=[];
+        %             Cxy_cols=[];
+        %             for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
+        %
+        %
+        %
+        %                 for evNo=1:length(eventType)
+        %
+        %
+        %                     for per_ii=1:2
+        %
+        %
+        %                         this_ii=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo)&(deltaCxy_elec_pair_per_mouse==1);
+        %                         these_elecs=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo);
+        %
+        %                         if sum(this_ii)>0
+        %                             kk=kk+1;
+        %
+        %                             mouse_col(kk,1)=deltaCxy_mouseNo_per_mouse(this_ii);
+        %                             naive_proficient_col(kk,1)=deltaCxy_perii_per_mouse(this_ii);
+        %                             event_col(kk,1)=deltaCxy_evNo_per_mouse(this_ii);
+        %                             group_col(kk,1)=deltaCxy_group_no_per_mouse(this_ii);
+        %                             deltaCxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=deltaCxy_per_mouse(these_elecs);
+        %                             Cxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=Cxy_per_mouse(these_elecs);
+        %                         end
+        %                     end
+        %                 end
+        %
+        %             end
+        %
+        %             t = table(group_col,naive_proficient_col,event_col,mouse_col,deltaCxy_cols(:,1),deltaCxy_cols(:,2),...
+        %                 deltaCxy_cols(:,3),deltaCxy_cols(:,4),deltaCxy_cols(:,5),deltaCxy_cols(:,6),deltaCxy_cols(:,7),deltaCxy_cols(:,8),...
+        %                 deltaCxy_cols(:,9),deltaCxy_cols(:,10),deltaCxy_cols(:,11),deltaCxy_cols(:,12),deltaCxy_cols(:,13),deltaCxy_cols(:,14),...
+        %                 deltaCxy_cols(:,15),deltaCxy_cols(:,16),...
+        %                 'VariableNames',{'Genotype','Proficiency','Event','Mouse','deltaCxy1','deltaCxy2',...
+        %                 'deltaCxy3','deltaCxy4','deltaCxy5','deltaCxy6','deltaCxy7','deltaCxy8','deltaCxy9','deltaCxy10',...
+        %                 'deltaCxy11','deltaCxy12','deltaCxy13','deltaCxy14','deltaCxy15','deltaCxy16'});
+        %             electrode_pairs=[1:16]'; %these are the electrode pairs
+        %             rm = fitrm(t,'deltaCxy1-deltaCxy16 ~ Genotype + Proficiency + Event + Mouse','WithinDesign',electrode_pairs)
+        %
+        %             % Perform repeated measures analysis of variance.
+        % %             ranovatbl = ranova(rm)
+        %             anovatbl=anova(rm,'WithinModel',electrode_pairs)
+        %             fprintf(1, '\n\n\n\n')
+        %         end
+        %
+        %
+        %
+        %         for bwii=1:no_bandwidths
+        %
+        %             fprintf(1, ['Repeated measures anova for coherence before the odor ' freq_names{bwii} '\n\n'])
+        %
+        %             %For all the condiitons setup the table
+        %             kk=0;
+        %             mouse_col=[];
+        %             naive_proficient_col=[];
+        %             event_col=[];
+        %             group_col=[];
+        %             deltaCxy_cols=[];
+        %             Cxy_cols=[];
+        %             for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
+        %
+        %
+        %
+        %                 for evNo=1:length(eventType)
+        %
+        %
+        %                     for per_ii=1:2
+        %
+        %
+        %                         this_ii=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo)&(deltaCxy_elec_pair_per_mouse==1);
+        %                         these_elecs=(deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_evNo_per_mouse==evNo)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_mouseNo_per_mouse==mouseNo);
+        %
+        %                         if sum(this_ii)>0
+        %                             kk=kk+1;
+        %
+        %                             mouse_col(kk,1)=deltaCxy_mouseNo_per_mouse(this_ii);
+        %                             naive_proficient_col(kk,1)=deltaCxy_perii_per_mouse(this_ii);
+        %                             event_col(kk,1)=deltaCxy_evNo_per_mouse(this_ii);
+        %                             group_col(kk,1)=deltaCxy_group_no_per_mouse(this_ii);
+        %                             deltaCxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=deltaCxy_per_mouse(these_elecs);
+        %                             Cxy_cols(kk,1:max(deltaCxy_elec_pair_per_mouse))=Cxy_per_mouse(these_elecs);
+        %                         end
+        %                     end
+        %                 end
+        %
+        %             end
+        %
+        %             t = table(group_col,naive_proficient_col,event_col,mouse_col,Cxy_cols(:,1),Cxy_cols(:,2),...
+        %                 Cxy_cols(:,3),Cxy_cols(:,4),Cxy_cols(:,5),Cxy_cols(:,6),Cxy_cols(:,7),Cxy_cols(:,8),...
+        %                 Cxy_cols(:,9),Cxy_cols(:,10),Cxy_cols(:,11),Cxy_cols(:,12),Cxy_cols(:,13),Cxy_cols(:,14),...
+        %                 Cxy_cols(:,15),Cxy_cols(:,16),...
+        %                 'VariableNames',{'Genotype','Proficiency','Event','Mouse','Cxy1','Cxy2',...
+        %                 'Cxy3','Cxy4','Cxy5','Cxy6','Cxy7','Cxy8','Cxy9','Cxy10',...
+        %                 'Cxy11','Cxy12','Cxy13','Cxy14','Cxy15','Cxy16'});
+        %             electrode_pairs=[1:16]'; %these are the electrode pairs
+        %             rm = fitrm(t,'Cxy1-Cxy16 ~ Genotype + Proficiency + Event + Mouse','WithinDesign',electrode_pairs)
+        %             % Perform repeated measures analysis of variance.
+        % %             ranovatbl = ranova(rm)
+        %             anovatbl=anova(rm,'WithinModel',electrode_pairs)
+        %             fprintf(1, '\n\n\n\n')
+        %         end
+        %
+        %
+        
+        
         %Now plot the average per mouse LFP power
-        for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
             %Plot the average
             
             try
@@ -11095,17 +11635,17 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
             
         end
         
-    
+        
         
         %Display cumulative histograms for delta coherence for average per electrode per mouse and do ranksum
         pvals=[];
         ranksum_deltaCxy=[];
         if sum(eventType==3)>0
-            for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+            for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
                 
                 %fprintf for ranksums
-                fprintf(1, ['Ranksum p values for delta coherence for ' freq_names{bwii} '\n'])
-                    
+                fprintf(1, ['Ranksum or t-test p values for delta coherence for ' freq_names{bwii} '\n'])
+                
                 ii_rank=0;
                 for evNo=1:length(eventType)
                     %Plot the average
@@ -11182,9 +11722,15 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
                 
                 for ii=1:ii_rank
                     for jj=ii+1:ii_rank
-                        p=ranksum(ranksum_deltaCxy(ii).deltaCxy,ranksum_deltaCxy(jj).deltaCxy);
-                        fprintf(1, ['p value for ' handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(ii).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(ii).per_ii} ' ' evTypeLabels{ranksum_deltaCxy(ii).evNo} ' vs ' ...
-                            handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(jj).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(jj).per_ii} ' ' evTypeLabels{ranksum_deltaCxy(jj).evNo} ' =  %d\n'],p)
+                        [p, r_or_t]=drg_ranksum_or_ttest(ranksum_deltaCxy(ii).deltaCxy,ranksum_deltaCxy(jj).deltaCxy);
+                        if r_or_t==0
+                            fprintf(1, ['p value ranksum for ' handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(ii).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(ii).per_ii} ' ' evTypeLabels{ranksum_deltaCxy(ii).evNo} ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(jj).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(jj).per_ii} ' ' evTypeLabels{ranksum_deltaCxy(jj).evNo} ' =  %d\n'],p)
+                        else
+                            fprintf(1, ['p value t-test for ' handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(ii).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(ii).per_ii} ' ' evTypeLabels{ranksum_deltaCxy(ii).evNo} ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(jj).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(jj).per_ii} ' ' evTypeLabels{ranksum_deltaCxy(jj).evNo} ' =  %d\n'],p)
+                        end
+                        
                         pvals=[pvals p];
                     end
                 end
@@ -11198,94 +11744,99 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         fprintf(1, ['pFDR = %d \n\n'],pFDR)
         fprintf(1, ['\n\n'])
         
-  
+        
         %Display cumulative histograms for  coherence before odor on for average per electrode per mouse and do ranksum
         pvals=[];
         ranksum_Cxy=[];
         if sum(eventType==3)>0
-            for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
+            for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
                 
                 %fprintf for ranksums
-                fprintf(1, ['Ranksum p values for coherence before odor for ' freq_names{bwii} '\n'])
-                    
+                fprintf(1, ['Ranksum or t-test p values for coherence before odor for ' freq_names{bwii} '\n'])
+                
                 ii_rank=0;
                 
+                
+                try
+                    close(bwii+16)
+                catch
+                end
+                hFig=figure(bwii+16);
+                
+                set(hFig, 'units','normalized','position',[.2 .2 .6 .6])
+                
+                set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+                hold on
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
                     
-                    try
-                        close(bwii+16)
-                    catch
-                    end
-                    hFig=figure(bwii+16);
+                    include_group=0;
                     
-                    set(hFig, 'units','normalized','position',[.2 .2 .6 .6])
                     
-                    set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
-                    hold on
-                    for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
                         
-                        include_group=0;
-                        
-                        
-                        for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        if sum((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo))>0
                             
-                            if sum((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo))>0
-                                
-                                include_group=1;
-                                
-                                
-                                if per_ii==1
-                                    if grNo==1
-                                        [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
-                                        plot(x_aic,f_aic,'Color',[1 0 0],'LineWidth',3)
-                                    else
-                                        [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
-                                        plot(x_aic,f_aic,'Color',[0 0 1],'LineWidth',3)
-                                    end
+                            include_group=1;
+                            
+                            
+                            if per_ii==1
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0],'LineWidth',3)
                                 else
-                                    if grNo==1
-                                        [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
-                                        plot(x_aic,f_aic,'Color',[1 0 0])
-                                    else
-                                        [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
-                                        plot(x_aic,f_aic,'Color',[0 0 1])
-                                    end
+                                    [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1],'LineWidth',3)
                                 end
-                                
-                                
-                                %Save data for ranksum
-                                ii_rank=ii_rank+1;
-                                ranksum_Cxy(ii_rank).Cxy=Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo));
-                                ranksum_Cxy(ii_rank).per_ii=per_ii;
-                                ranksum_Cxy(ii_rank).grNo=grNo;
-                                
+                            else
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0])
+                                else
+                                    [f_aic,x_aic] = drg_ecdf(Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1])
+                                end
                             end
-                        end
-                        
-                        if include_group==1
-                            ii_gr_included=ii_gr_included+1;
-                            groups_included(ii_gr_included)=grNo;
+                            
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            ranksum_Cxy(ii_rank).Cxy=Cxy_per_mouse((deltaCxy_perii_per_mouse==per_ii)&(deltaCxy_bwii_per_mouse==bwii)&(deltaCxy_group_no_per_mouse==grNo));
+                            ranksum_Cxy(ii_rank).per_ii=per_ii;
+                            ranksum_Cxy(ii_rank).grNo=grNo;
+                            
                         end
                     end
-                    title([freq_names{bwii} ' coherence before odor per electrode (per mouse)'])
                     
-                    legend([handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive']...
-                        ,[handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
-                    
-                    xlabel('coherence')
-                    ylabel('Cumulative probability')
-                    
-                    
-                    prof_naive_leg{1}='Proficient';
-                    prof_naive_leg{2}='Naive';
-                    
-               
+                    if include_group==1
+                        ii_gr_included=ii_gr_included+1;
+                        groups_included(ii_gr_included)=grNo;
+                    end
+                end
+                title([freq_names{bwii} ' coherence before odor per electrode (per mouse)'])
+                
+                legend([handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive']...
+                    ,[handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                
+                xlabel('coherence')
+                ylabel('Cumulative probability')
+                
+                
+                prof_naive_leg{1}='Proficient';
+                prof_naive_leg{2}='Naive';
+                
+                
                 
                 
                 for ii=1:ii_rank
                     for jj=ii+1:ii_rank
-                        p=ranksum(ranksum_Cxy(ii).Cxy,ranksum_Cxy(jj).Cxy);
-                        fprintf(1, ['p value for ' handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(ii).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(ii).per_ii}  ' vs ' ...
-                            handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(jj).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(jj).per_ii}  ' =  %d\n'],p)
+                        [p, r_or_t]=drg_ranksum_or_ttest(ranksum_Cxy(ii).Cxy,ranksum_Cxy(jj).Cxy);
+                        if r_or_t==0
+                            fprintf(1, ['p value ranksum for ' handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(ii).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(ii).per_ii}  ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(jj).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(jj).per_ii}  ' =  %d\n'],p)
+                        else
+                            fprintf(1, ['p value t-test for ' handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(ii).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(ii).per_ii}  ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_deltaCxy(jj).grNo} ' ' prof_naive_leg{ranksum_deltaCxy(jj).per_ii}  ' =  %d\n'],p)
+                        end
                         pvals=[pvals p];
                     end
                 end
@@ -11299,9 +11850,2281 @@ for bwii=1:4    %for bandwidths (theta, beta, low gamma, high gamma)
         fprintf(1, ['pFDR = %d \n\n'],pFDR)
         fprintf(1, ['\n\n'])
         
-            
         
-%         save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
+        
+        %         save([handles.PathName handles.drgb.outFileName(1:end-4) output_suffix]);
+    case 22
+        % Multiclass ROC analysis of LFP power differences for naive and proficient
+        % mice for different epochs (concentrations or S+ vs. S-) and different groups. Analyzed per mouse
+%         no_dBs=1;
+%         wave_logP_power=[];
+        no_ROCs=0;
+        ROCout=[];
+        p_vals_ROC=[];
+        per_mouse_no_ROCs=0;
+        per_mouse_ROCout=[];
+        per_mouse_p_vals_ROC=[];
+%         wave_logP_powerEv1=[];
+%         no_Ev1=0;
+%         for evNo=1:length(eventType)
+%             evNo_out(evNo).noWB=0;
+%         end
+%         wave_logP_powerEv1WB=[];
+%         wave_logP_powerEv2WB=[];
+        wave_logP_No_per_mouse=0;
+        wave_logPpeak_per_mouse=[];
+        wave_logP_perii_per_mouse=[];
+        wave_logP_evNo_per_mouse=[];
+        wave_logP_bwii_per_mouse=[];
+        wave_logP_mouseNo_per_mouse=[];
+        wave_logP_electrode_per_mouse=[];
+        wave_logP_per_mouse=[];
+        mouse_included=[];
+        
+        out_times=handles_drgb.drgb.file(1).waveERWA_out_times;
+        
+        fprintf(1, ['Pairwise ERWA analysis for Justin''s paper\n\n'])
+%         p_vals=[];
+        no_files=max(files);
+        
+        if exist('which_electrodes')==0
+            which_electrodes=[1:16];
+        end
+        
+     
+        szpc=size(percent_windows);
+        for per_ii=1:szpc(1)
+            
+            for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
+                mouse_has_files=0;
+                theseEvNosPerEl=[];
+                for evNo=1:length(eventType)
+                    for bwii=1:no_bandwidths
+                        for elec=1:16
+                            theseEvNosPerEl(evNo,bwii,elec).noEv=0;
+                        end
+                    end
+                end
+                
+                for elec=1:16
+                    if sum(which_electrodes==elec)>0
+                        
+                        theseEvNos=[];
+                        for evNo=1:length(eventType)
+                            for bwii=1:no_bandwidths
+                                theseEvNos(evNo,bwii).noEv=0;
+                            end
+                        end
+                        
+                        for fileNo=1:no_files
+                            if sum(files==fileNo)>0
+                                if handles_drgb.drgbchoices.mouse_no(fileNo)==mouseNo
+                                    
+                                    
+                                    
+                                   
+                                    %Note: FOr ERWA the reference is
+                                    %already subtracted
+                                    lfpodNo=find((files_per_lfp==fileNo)&(elec_per_lfp==elec)&(window_per_lfp==winNo));
+                                        
+                                        
+                                        if (~isempty(handles_drgb.drgb.lfpevpair(lfpodNo).wave_log_P_t_lick_referenced))
+                                            
+                                            percent_mask=[];
+                                            percent_mask=logical((handles_drgb.drgb.lfpevpair(lfpodNo).wave_perCorrERWA>=percent_windows(per_ii,1))...
+                                                &(handles_drgb.drgb.lfpevpair(lfpodNo).wave_perCorrERWA<=percent_windows(per_ii,2)));
+                                            
+                                            
+                                            for evNo=1:length(eventType)
+                                                
+                                                noWB_for_evNo(evNo)=-1;
+                                                
+                                                trials_in_event_Ev=[];
+                                                trials_in_event_Ev=(handles_drgb.drgb.lfpevpair(lfpodNo).wave_which_eventERWA(eventType(evNo),:)==1)&percent_mask;
+                                                
+                                                if (sum(trials_in_event_Ev)>=1)
+                                                    
+                                                    
+                                                    this_wave_logP=zeros(sum(trials_in_event_Ev),length(frequency),length(out_times));
+                                                    this_wave_logP(:,:,:)=handles_drgb.drgb.lfpevpair(lfpodNo).wave_log_P_t_lick_referenced(trials_in_event_Ev,:,:);
+                                                   
+                                                   
+                                                    %Do per bandwidth analysis
+                                                    for bwii=1:no_bandwidths
+                                                        theseEvNos(evNo,bwii).groupNo(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=handles_drgb.drgbchoices.group_no(fileNo)*ones(1,sum(trials_in_event_Ev));
+                                                        theseEvNos(evNo,bwii).lick_freq(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=handles_drgb.drgb.lfpevpair(lfpodNo).wave_no_licks_per_trial(1,trials_in_event_Ev)/...
+                                                            (handles_drgb.drgbchoices.timeEnd(winNo)-handles_drgb.drgbchoices.timeStart(winNo));
+                                                        
+                                                        this_band=(frequency>=low_freq(bwii))&(frequency<=high_freq(bwii));
+                                                        
+                                                        %Enter the  Ev1
+                                                        this_wave_logPEv=zeros(sum(trials_in_event_Ev),length(out_times));
+                                                        this_wave_logPEv(:,:)=mean(this_wave_logP(:,this_band,:),2);
+                                                        
+                                                        theseEvNos(evNo,bwii).this_wave_logPEv(theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev),1:length(out_times))=this_wave_logPEv;
+                                                        theseEvNos(evNo,bwii).this_wave_logPEvpeak(1,theseEvNos(evNo,bwii).noEv+1:theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev))=prctile(this_wave_logPEv',95);
+                                                        theseEvNos(evNo,bwii).noEv=theseEvNos(evNo,bwii).noEv+sum(trials_in_event_Ev);
+                                                        
+                                                        theseEvNosPerEl(evNo,bwii,elec).this_wave_logPEv(theseEvNosPerEl(evNo,bwii,elec).noEv+1:theseEvNosPerEl(evNo,bwii,elec).noEv+sum(trials_in_event_Ev),1:length(out_times))=this_wave_logPEv;
+                                                        theseEvNosPerEl(evNo,bwii,elec).this_wave_logPEvpeak(1,theseEvNosPerEl(evNo,bwii,elec).noEv+1:theseEvNosPerEl(evNo,bwii,elec).noEv+sum(trials_in_event_Ev))=prctile(this_wave_logPEv',95);
+                                                        theseEvNosPerEl(evNo,bwii,elec).groupNo(1,theseEvNosPerEl(evNo,bwii,elec).noEv+1:theseEvNosPerEl(evNo,bwii,elec).noEv+sum(trials_in_event_Ev))=handles_drgb.drgbchoices.group_no(fileNo)*ones(1,sum(trials_in_event_Ev));
+                                                        
+                                                        theseEvNosPerEl(evNo,bwii,elec).noEv=theseEvNosPerEl(evNo,bwii,elec).noEv+sum(trials_in_event_Ev);
+
+                                                        mouse_has_files=1;
+                                                    end
+                                                    
+                                                    
+                                                    fprintf(1, ['%d trials in event No %d succesfully processed for file No %d electrode %d\n'],sum(trials_in_event_Ev), evNo,fileNo,elec);
+                                                    
+                                                else
+                                                    
+                                                    
+                                                    fprintf(1, ['%d trials in event No %d fewer than minimum trials per event ' evTypeLabels{evNo} ' for file No %d electrode %d\n'],sum(trials_in_event_Ev), min_trials_per_event,fileNo,elec);
+                                                    
+                                                    
+                                                end
+                                                
+                                                
+                                            end
+                                            
+                                            
+                                        else
+                                            
+                                            fprintf(1, ['Empty allPower for file No %d electrode %d\n'],fileNo,elec);
+                                            
+                                        end
+                                        
+                                        
+                                    
+                                end %if mouseNo
+                            end
+                        end %fileNo
+                        
+                        if mouse_has_files==1
+                            mouse_included(mouseNo)=1;
+                            %Calculate per mouse per electrode wave_logP
+                            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                                for evNo=1:length(eventType)
+                                    for bwii=1:no_bandwidths
+                                        if theseEvNos(evNo,bwii).noEv>0
+                                            if sum(theseEvNos(evNo,bwii).groupNo==grNo)>0
+                                                wave_logP_No_per_mouse=wave_logP_No_per_mouse+1;
+                                                wave_logPpeak_per_mouse(wave_logP_No_per_mouse)=mean(theseEvNos(evNo,bwii).this_wave_logPEvpeak(theseEvNos(evNo,bwii).groupNo==grNo));
+                                                wave_logP_per_mouse(wave_logP_No_per_mouse,1:length(out_times))=mean(theseEvNos(evNo,bwii).this_wave_logPEv(theseEvNos(evNo,bwii).groupNo==grNo,:),1);
+                                                wave_lick_freq_per_mouse(wave_logP_No_per_mouse)=mean(theseEvNos(evNo,bwii).lick_freq(theseEvNos(evNo,bwii).groupNo==grNo));
+                                                wave_logP_perii_per_mouse(wave_logP_No_per_mouse)=per_ii;
+                                                wave_logP_evNo_per_mouse(wave_logP_No_per_mouse)=evNo;
+                                                wave_logP_bwii_per_mouse(wave_logP_No_per_mouse)=bwii;
+                                                wave_logP_mouseNo_per_mouse(wave_logP_No_per_mouse)=mouseNo;
+                                                wave_logP_electrode_per_mouse(wave_logP_No_per_mouse)=elec;
+                                                wave_logP_group_no_per_mouse(wave_logP_No_per_mouse)=grNo;
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                            
+                            %Calculate per electrode ROC
+                            can_calculate_auroc=1;
+                            if can_calculate_auroc==1
+                                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                                    for evNo1=1:length(eventType)
+                                        if theseEvNos(evNo1).noEv>0
+                                            for evNo2=evNo1+1:length(eventType)
+                                                if theseEvNos(evNo2).noEv>0
+                                                    for bwii=1:no_bandwidths
+                                                        
+                                                        
+                                                        %Enter Ev1
+                                                        trials_in_event_Ev1=length(theseEvNos(evNo1,bwii).this_wave_logPEv(theseEvNos(evNo1).groupNo==grNo));
+                                                        this_wave_logPEv1=zeros(trials_in_event_Ev1,1);
+                                                        this_wave_logPEv1=theseEvNos(evNo1,bwii).this_wave_logPEv(theseEvNos(evNo1).groupNo==grNo);
+                                                        roc_data=[];
+                                                        roc_data(1:trials_in_event_Ev1,1)=this_wave_logPEv1;
+                                                        roc_data(1:trials_in_event_Ev1,2)=zeros(trials_in_event_Ev1,1);
+                                                        
+                                                        %Enter Ev2
+                                                        trials_in_event_Ev2=length(theseEvNos(evNo2,bwii).this_wave_logPEv(theseEvNos(evNo2).groupNo==grNo));
+                                                        total_trials=trials_in_event_Ev1+trials_in_event_Ev2;
+                                                        this_wave_logPEv2=zeros(trials_in_event_Ev2,1);
+                                                        this_wave_logPEv2=theseEvNos(evNo2,bwii).this_wave_logPEv(theseEvNos(evNo2).groupNo==grNo);
+                                                        roc_data(trials_in_event_Ev1+1:total_trials,1)=this_wave_logPEv2;
+                                                        roc_data(trials_in_event_Ev1+1:total_trials,2)=ones(trials_in_event_Ev2,1);
+                                                        
+                                                        
+                                                        %Find  per electrode ROC
+                                                        if (trials_in_event_Ev1>=5)&(trials_in_event_Ev2>=5)
+                                                            no_ROCs=no_ROCs+1;
+                                                            roc=roc_calc(roc_data,0,0.05,0);
+                                                            ROCout(no_ROCs).fileNo=handles_drgb.drgb.lfpevpair(lfpodNo).fileNo;
+                                                            ROCelec(no_ROCs)=elec;
+                                                            ROCgroups(no_ROCs)=grNo;
+                                                            ROCmouse(no_ROCs)=mouseNo;
+                                                            ROCbandwidth(no_ROCs)=bwii;
+                                                            ROCper_ii(no_ROCs)=per_ii;
+                                                            ROCEvNo1(no_ROCs)=evNo1;
+                                                            ROCEvNo2(no_ROCs)=evNo2;
+                                                            if sum(eventType==3)==0
+                                                                if ((abs(evNo1-2)<=1)&(abs(evNo2-5)<=1))||((abs(evNo1-5)<=1)&(abs(evNo2-2)<=1))
+                                                                    ROC_between(no_ROCs)=1;
+                                                                else
+                                                                    ROC_between(no_ROCs)=0;
+                                                                end
+                                                                ROC_neighbor(no_ROCs)=abs(evNo1-evNo2);
+                                                            else
+                                                                %This is S+/S-,
+                                                                %these values are
+                                                                %assigned
+                                                                %arbitrarily so
+                                                                %that plotting
+                                                                %auROC works
+                                                                ROC_between(no_ROCs)=1;
+                                                                ROC_neighbor(no_ROCs)=2;
+                                                            end
+                                                            
+                                                            auROC(no_ROCs)=roc.AUC-0.5;
+                                                            p_valROC(no_ROCs)=roc.p;
+                                                            p_vals_ROC=[p_vals_ROC roc.p];
+                                                            
+                                                            %I have this code here to plot the ROC
+                                                            if (per_ii==1)&(bwii==4)&(roc.AUC-0.5>0.3)
+                                                                show_roc=0;
+                                                                if show_roc==1
+                                                                    %I have this code here to plot the ROC
+                                                                    roc=roc_calc(roc_data,0,0.05,1);
+                                                                    
+                                                                    %Do the histograms
+                                                                    try
+                                                                        close(2)
+                                                                    catch
+                                                                    end
+                                                                    figure(2)
+                                                                    
+                                                                    hold on
+                                                                    
+                                                                    max_dB=max([max(this_wave_logPEv1) max(this_wave_logPEv2)]);
+                                                                    min_dB=min([min(this_wave_logPEv1) min(this_wave_logPEv2)]);
+                                                                    
+                                                                    edges=[min_dB-0.1*(max_dB-min_dB):(max_dB-min_dB)/20:max_dB+0.1*(max_dB-min_dB)];
+                                                                    histogram(this_wave_logPEv1,edges,'FaceColor','b','EdgeColor','b')
+                                                                    histogram(this_wave_logPEv2,edges,'FaceColor','r','EdgeColor','r')
+                                                                    xlabel('delta power dB')
+                                                                    title(['Histogram for conentrations ' num2str(concs2(evNo1)) ' and ' num2str(concs2(evNo2))])
+                                                                    pffft=1;
+                                                                end
+                                                            end
+                                                        end
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                            
+                        else
+                            mouse_included(mouseNo)=0;
+                        end
+                        
+                        
+                    end
+                    
+                end
+                
+                %Calculate per mouse ROC
+                if mouse_has_files==1
+                    for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                        for evNo1=1:length(eventType)
+                            for evNo2=evNo1+1:length(eventType)
+                                
+                                
+                                for bwii=1:no_bandwidths
+                                    
+                                    %Enter Ev1
+                                    trials_in_event_Ev1=length(theseEvNosPerEl(evNo1,bwii,which_electrodes(1)).this_wave_logPEv(theseEvNosPerEl(evNo1,bwii,which_electrodes(1)).groupNo==grNo));
+                                    
+                                    this_wave_logPEv1=zeros(trials_in_event_Ev1,1);
+                                    
+%                                     for elec=which_electrodes
+%                                         this_wave_logPEv1=this_wave_logPEv1+(theseEvNosPerEl(evNo1,bwii,elec).this_wave_logPEv((theseEvNosPerEl(evNo1,bwii,elec).groupNo==grNo))')/length(which_electrodes);
+%                                     end
+%                                     
+                                    no_elects=0;
+                                    for elec=which_electrodes
+                                        if length(this_wave_logPEv1)==length(theseEvNosPerEl(evNo1,bwii,elec).groupNo)
+                                            this_wave_logPEv1=this_wave_logPEv1+(theseEvNosPerEl(evNo1,bwii,elec).this_wave_logPEv((theseEvNosPerEl(evNo1,bwii,elec).groupNo==grNo))');
+                                            no_elects=no_elects+1;
+                                        end
+                                    end
+                                    this_wave_logPEv1=this_wave_logPEv1/no_elects;
+                                    
+                                    roc_data=[];
+                                    roc_data(1:trials_in_event_Ev1,1)=this_wave_logPEv1;
+                                    roc_data(1:trials_in_event_Ev1,2)=zeros(trials_in_event_Ev1,1);
+                                    
+                                    %Enter Ev2
+                                    trials_in_event_Ev2=length(theseEvNosPerEl(evNo2,bwii,which_electrodes(1)).this_wave_logPEv(theseEvNosPerEl(evNo2,bwii,which_electrodes(1)).groupNo==grNo));
+                                    total_trials=trials_in_event_Ev1+trials_in_event_Ev2;
+                                    this_wave_logPEv2=zeros(trials_in_event_Ev2,1);
+                                    
+                                    no_elects=0;
+                                    for elec=which_electrodes
+                                        if length(this_wave_logPEv2)==length(theseEvNosPerEl(evNo2,bwii,elec).groupNo)
+                                            this_wave_logPEv2=this_wave_logPEv2+(theseEvNosPerEl(evNo2,bwii,elec).this_wave_logPEv((theseEvNosPerEl(evNo2,bwii,elec).groupNo==grNo))');
+                                            no_elects=no_elects+1;
+                                        end
+                                    end
+                                    this_wave_logPEv2=this_wave_logPEv2/no_elects;
+                                    
+                                    roc_data(trials_in_event_Ev1+1:total_trials,1)=this_wave_logPEv2;
+                                    roc_data(trials_in_event_Ev1+1:total_trials,2)=ones(trials_in_event_Ev2,1);
+                                    
+                                    
+                                    %Find  per electrode ROC
+                                    if (trials_in_event_Ev1>=5)&(trials_in_event_Ev2>=5)
+                                        per_mouse_no_ROCs=per_mouse_no_ROCs+1;
+                                        try
+                                        roc=roc_calc(roc_data,0,0.05,0);
+                                        catch
+                                            pffft=1
+                                        end
+                                        per_mouse_ROCout(per_mouse_no_ROCs).fileNo=handles_drgb.drgb.lfpevpair(lfpodNo).fileNo;
+                                        per_mouse_ROCbandwidth(per_mouse_no_ROCs)=bwii;
+                                        per_mouse_ROCper_ii(per_mouse_no_ROCs)=per_ii;
+                                        per_mouse_ROCgroup(per_mouse_no_ROCs)=grNo;
+                                        per_mouse_ROCEvNo1(per_mouse_no_ROCs)=evNo1;
+                                        per_mouse_ROCEvNo2(per_mouse_no_ROCs)=evNo2;
+                                        if ((abs(evNo1-2)<=1)&(abs(evNo2-5)<=1))||((abs(evNo1-5)<=1)&(abs(evNo2-2)<=1))
+                                            per_mouse_ROC_between(per_mouse_no_ROCs)=1;
+                                        else
+                                            per_mouse_ROC_between(per_mouse_no_ROCs)=0;
+                                        end
+                                        per_mouse_ROC_neighbor(per_mouse_no_ROCs)=abs(evNo1-evNo2);
+                                        per_mouse_auROC(per_mouse_no_ROCs)=roc.AUC-0.5;
+                                        per_mouse_p_valROC(per_mouse_no_ROCs)=roc.p;
+                                        per_mouse_p_vals_ROC=[p_vals_ROC roc.p];
+                                        
+                                        %I have this code here to plot the ROC
+                                        if roc.AUC-0.5>0.3
+                                            show_roc=0;
+                                            if show_roc==1
+                                                %I have this code here to plot the ROC
+                                                roc=roc_calc(roc_data,0,0.05,1);
+                                                
+                                                %Do the histograms
+                                                try
+                                                    close(2)
+                                                catch
+                                                end
+                                                figure(2)
+                                                
+                                                hold on
+                                                
+                                                max_dB=max([max(this_wave_logPEv1) max(this_wave_logPEv2)]);
+                                                min_dB=min([min(this_wave_logPEv1) min(this_wave_logPEv2)]);
+                                                
+                                                edges=[min_dB-0.1*(max_dB-min_dB):(max_dB-min_dB)/20:max_dB+0.1*(max_dB-min_dB)];
+                                                histogram(this_wave_logPEv1,edges,'FaceColor','b','EdgeColor','b')
+                                                histogram(this_wave_logPEv2,edges,'FaceColor','r','EdgeColor','r')
+                                                xlabel('delta power dB')
+                                                title(['Histogram for conentrations ' num2str(concs2(evNo1)) ' and ' num2str(concs2(evNo2))])
+                                                pffft=1;
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                if mouse_has_files==1
+                    mouse_included(mouseNo)=1;
+                else
+                    mouse_included(mouseNo)=0;
+                end
+            end
+            
+            
+            
+        end
+        fprintf(1, '\n\n')
+        
+        pFDRauROC=drsFDRpval(p_vals_ROC);
+        fprintf(1, ['pFDR for per electrode auROC  = %d\n\n'],pFDRauROC);
+        
+        per_mouse_pFDRauROC=drsFDRpval(per_mouse_p_vals_ROC);
+        fprintf(1, ['pFDR for per mouse auROC  = %d\n\n'],per_mouse_pFDRauROC);
+        
+        %Plot the lick frequency
+        
+        %Plot the average
+        try
+            close(1)
+        catch
+        end
+        hFig=figure(1);
+        
+        set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+        
+        set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+        hold on
+        
+        data_wave_lickf=[];
+        bwii=1;
+        
+        bar_lab_loc=[];
+        no_ev_labels=0;
+        ii_gr_included=0;
+        
+        ii_for_test=0;
+        
+        fprintf(1, ['\n\n'])
+        
+        
+        for grNo=1:max(handles_drgb.drgbchoices.group_no)
+            
+            include_group=0;
+            
+            for evNo=1:length(eventType)
+                
+                per_included=0;
+                these_dB_per_e=[];
+                for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                    
+                    %bar_offset=21-evNo*3+(2-per_ii);
+                    if sum(eventType==3)>0
+                        bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(evNo-1);
+                    else
+                        bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
+                    end
+                    
+                    these_offsets(per_ii)=bar_offset;
+                    
+                    if sum((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))>0
+                        
+                        include_group=1;
+                        
+                        per_included=per_included+1;
+                        
+                        if per_ii==1
+                            bar(bar_offset,mean(wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),'r','LineWidth', 3)
+                        else
+                            bar(bar_offset,mean(wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),'b','LineWidth', 3)
+                        end
+                        
+                        %Individual points; in the future add lines linking the
+                        %points?
+                        plot((bar_offset)*ones(1,sum((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),...
+                            wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)),'o',...
+                            'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                        data_for_lines(per_ii).these_dB_per_e(1:length(wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))))=...
+                            wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo));
+                        data_for_lines(per_ii).these_mice(1:length(wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))))=...
+                            wave_logP_mouseNo_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo));
+                        data_for_lines(per_ii).these_bar_offsets=bar_offset;
+                        
+                        
+                        %Average and CI
+                        plot(bar_offset,mean(wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),'ok','LineWidth', 3)
+                        if sum((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))>2
+                            CI = bootci(1000, {@mean, wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))},'type','cper');
+                            plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                        end
+                        
+                        %Save data for ranksum/ttest
+                        ii_for_test=ii_for_test+1;
+                        data_wave_lickf(ii_for_test).data=wave_lick_freq_per_mouse((wave_logP_electrode_per_mouse==1)&(wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo));
+                        data_wave_lickf(ii_for_test).prof_naive=per_ii;
+                        data_wave_lickf(ii_for_test).evNo=evNo;
+                        data_wave_lickf(ii_for_test).groupNo=grNo;
+                    end
+                end
+                if per_included==2
+                    for mouseNo=1:length(mouse_included)
+                        if mouse_included(mouseNo)==1
+                            if (sum(data_for_lines(1).these_mice==mouseNo)>0)&(sum(data_for_lines(2).these_mice==mouseNo)>0)
+                                try
+                                    plot([data_for_lines(1).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo)); data_for_lines(2).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo))],...
+                                        [data_for_lines(1).these_dB_per_e(data_for_lines(1).these_mice==mouseNo); data_for_lines(2).these_dB_per_e(data_for_lines(2).these_mice==mouseNo)],'-','Color',[0.7 0.7 0.7])
+                                catch
+                                end
+                            end
+                        end
+                    end
+                end
+                if include_group==1
+                    bar_lab_loc=[bar_lab_loc mean(these_offsets)];
+                    no_ev_labels=no_ev_labels+1;
+                    if sum(eventType==3)>0
+                        bar_labels{no_ev_labels}=evTypeLabels{evNo};
+                    else
+                        bar_labels{no_ev_labels}=num2str(concs(evNo));
+                    end
+                end
+            end
+            if include_group==1
+                ii_gr_included=ii_gr_included+1;
+                groups_included(ii_gr_included)=grNo;
+            end
+        end
+        
+        title(['Average lick freqency per mouse'])
+        
+        %Annotations identifying groups
+        x_interval=0.8/ii_gr_included;
+        for ii=1:ii_gr_included
+            annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.8 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+        end
+        
+        %Proficient/Naive annotations
+        annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+        annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+        
+        %x labels
+        to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+        sorted_A=sortrows(to_sort);
+        sorted_bar_lab_loc=sorted_A(:,1);
+        for ii=1:length(bar_lab_loc)
+            sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+        end
+        xticks(sorted_bar_lab_loc)
+        xticklabels(sorted_bar_labels)
+        
+        if sum(eventType==3)==0
+            xlabel('Concentration (%)')
+        end
+        
+        ylabel('Lick frequency (Hz)')
+        
+        %Now do the ranksums/t tests
+        prof_naive_leg{1}='Proficient';
+        prof_naive_leg{2}='Naive';
+        for ii=1:ii_for_test
+            data_wave_lickf(ii).description=[handles_drgb.drgbchoices.group_no_names{data_wave_lickf(ii).groupNo} ' ' evTypeLabels{data_wave_lickf(ii).evNo} ' ' prof_naive_leg{data_wave_lickf(ii).prof_naive} ];
+        end
+        fprintf(1, ['Ranksum or t-test p values for lick rate\n'])
+        output_data = drgMutiRanksumorTtest(data_wave_lickf);
+        
+           
+        
+        %Now plot the per mouse delta peak wavelet LFP power computed for each electrode
+        pvals=[];
+        figOffset=1;
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
+            
+            %Plot the average
+            try
+                close(bwii+figOffset)
+            catch
+            end
+            hFig=figure(bwii+figOffset);
+            
+            set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            
+            set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+            hold on
+            
+            data_wave_logP=[];
+            prof_naive=[];
+            events=[];
+            mice=[];
+            electrodes=[];
+            groups=[];
+            
+            bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            fprintf(1, ['\n\n'])
+            fprintf(1, ['ANOVAN for peak ERWA power per mouse per electrode, mouse as random factor\n\n'])
+            
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    per_included=0;
+                    these_dB_per_e=[];
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        %bar_offset=21-evNo*3+(2-per_ii);
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(evNo-1);
+                        else
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
+                        end
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        if sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))>0
+                            
+                            include_group=1;
+                            
+                            per_included=per_included+1;
+                            
+                            if per_ii==1
+                                bar(bar_offset,mean(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),'r','LineWidth', 3)
+                            else
+                                bar(bar_offset,mean(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),'b','LineWidth', 3)
+                            end
+                            
+                            %Individual points; in the future add lines linking the
+                            %points?
+                            plot((bar_offset)*ones(1,sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),...
+                                wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)),'o',...
+                                'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                            data_for_lines(per_ii).these_dB_per_e(1:length(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))))=...
+                                wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo));
+                            data_for_lines(per_ii).these_mice(1:length(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))))=...
+                                wave_logP_mouseNo_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo));
+                            data_for_lines(per_ii).these_bar_offsets=bar_offset;
+                            
+                            
+                            %Average and CI
+                            plot(bar_offset,mean(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))),'ok','LineWidth', 3)
+                            if sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))>2
+                                CI = bootci(1000, {@mean, wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))},'type','cper');
+                                plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                            end
+                            
+                            %Save data for anovan
+                            data_wave_logP=[data_wave_logP wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))];
+                            prof_naive=[prof_naive per_ii*ones(1,sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)))];
+                            events=[events evNo*ones(1,sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)))];
+                            mice=[mice wave_logP_mouseNo_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))];
+                            electrodes=[electrodes wave_logP_electrode_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))];
+                            groups=[groups wave_logP_group_no_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))];
+                        end
+                    end
+                    if per_included==2
+                        for mouseNo=1:length(mouse_included)
+                            if mouse_included(mouseNo)==1
+                                if (sum(data_for_lines(1).these_mice==mouseNo)>0)&(sum(data_for_lines(2).these_mice==mouseNo)>0)
+                                    try
+                                        plot([data_for_lines(1).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo)); data_for_lines(2).these_bar_offsets*ones(1,sum(data_for_lines(1).these_mice==mouseNo))],...
+                                            [data_for_lines(1).these_dB_per_e(data_for_lines(1).these_mice==mouseNo); data_for_lines(2).these_dB_per_e(data_for_lines(2).these_mice==mouseNo)],'-','Color',[0.7 0.7 0.7])
+                                    catch
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if include_group==1
+                        bar_lab_loc=[bar_lab_loc mean(these_offsets)];
+                        no_ev_labels=no_ev_labels+1;
+                        if sum(eventType==3)>0
+                            bar_labels{no_ev_labels}=evTypeLabels{evNo};
+                        else
+                            bar_labels{no_ev_labels}=num2str(concs(evNo));
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+            
+            title([freq_names{bwii} ' average peak ERWA delta dB power per mouse, per electrode'])
+            
+            %Annotations identifying groups
+            x_interval=0.8/ii_gr_included;
+            for ii=1:ii_gr_included
+                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.8 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+            %x labels
+            to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+            sorted_A=sortrows(to_sort);
+            sorted_bar_lab_loc=sorted_A(:,1);
+            for ii=1:length(bar_lab_loc)
+                sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+            end
+            xticks(sorted_bar_lab_loc)
+            xticklabels(sorted_bar_labels)
+            
+            if sum(eventType==3)==0
+                xlabel('Concentration (%)')
+            end
+            
+            ylabel('Peak ERWA power (dB)')
+            
+            
+            
+            %Calculate anovan for inteaction
+            [p,tbl,stats]=anovan(data_wave_logP,{prof_naive events mice electrodes},'varnames',{'proficient_vs_naive','events','groups','mice'},'display','off','random',4);
+            fprintf(1, ['p value for anovan peak ERWA dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
+            fprintf(1, ['p value for anovan peak ERWA dB power  per mouse per electrode for events ' freq_names{bwii} '= %d \n'],  p(2));
+            fprintf(1, ['p value for anovan peak ERWA dB power  per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(3));
+            
+            
+            %Plot the cumulative histos and do ranksum
+            %Plot the average
+            
+            try
+                close(bwii+figOffset+4)
+            catch
+            end
+            hFig=figure(bwii+figOffset+4);
+            
+            set(hFig, 'units','normalized','position',[.1 .5 .4 .4])
+            
+            set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+            
+            ii_rank=0;
+            dBpower_rank=[];
+            maxdB=-200;
+            mindB=200;
+            for evNo=1:length(eventType)
+                subplot(length(eventType),1,evNo)
+                hold on
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        
+                        if sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))>0
+                            
+                            
+                            if per_ii==1
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0],'LineWidth',3)
+                                else
+                                    [f_aic,x_aic] = drg_ecdf(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1],'LineWidth',3)
+                                end
+                            else
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0])
+                                else
+                                    [f_aic,x_aic] = drg_ecdf(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1])
+                                end
+                            end
+                            
+                            
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            dBpower_rank(ii_rank).wave_logPpower=wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo));
+                            dBpower_rank(ii_rank).per_ii=per_ii;
+                            dBpower_rank(ii_rank).grNo=grNo;
+                            dBpower_rank(ii_rank).evNo=evNo;
+                            maxdB=max([maxdB max(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)))]);
+                            mindB=min([mindB min(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo)))]);
+                        end
+                    end
+                    
+                end
+                legend([handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive'],...
+                    [handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                title([freq_names{bwii} ' peak ERWA dB power per mouse, per electrode for ' evTypeLabels{evNo}])
+                xlabel('peak ERWA power (dB)')
+                ylabel('Probability')
+            end
+            
+            for evNo=1:length(eventType)
+                subplot(length(eventType),1,evNo)
+                xlim([mindB-0.1*(maxdB-mindB) maxdB+0.1*(maxdB-mindB)])
+            end
+            
+            %Now do the ranksums
+            fprintf(1, ['Ranksum or t-test p values for peak ERWA dB power per electrode for ' freq_names{bwii} '\n'])
+            prof_naive_leg{1}='Proficient';
+            prof_naive_leg{2}='Naive';
+            for ii=1:ii_rank
+                for jj=ii+1:ii_rank
+                    [p, r_or_t]=drg_ranksum_or_ttest(dBpower_rank(ii).wave_logPpower,dBpower_rank(jj).wave_logPpower);
+                    if r_or_t==0
+                        fprintf(1, ['p value ranksum for ' handles_drgb.drgbchoices.group_no_names{dBpower_rank(ii).grNo} ' ' evTypeLabels{dBpower_rank(ii).evNo} ' ' prof_naive_leg{dBpower_rank(ii).per_ii} ' vs ' ...
+                            handles_drgb.drgbchoices.group_no_names{dBpower_rank(jj).grNo} ' ' evTypeLabels{dBpower_rank(jj).evNo} ' ' prof_naive_leg{dBpower_rank(jj).per_ii} ' =  %d\n'],p)
+                    else
+                        fprintf(1, ['p value t-test for ' handles_drgb.drgbchoices.group_no_names{dBpower_rank(ii).grNo} ' ' evTypeLabels{dBpower_rank(ii).evNo} ' ' prof_naive_leg{dBpower_rank(ii).per_ii} ' vs ' ...
+                            handles_drgb.drgbchoices.group_no_names{dBpower_rank(jj).grNo} ' ' evTypeLabels{dBpower_rank(jj).evNo} ' ' prof_naive_leg{dBpower_rank(jj).per_ii} ' =  %d\n'],p)
+                    end
+                    pvals=[pvals p];
+                end
+            end
+            fprintf(1, ['\n\n'])
+            
+        end
+        pFDR = drsFDRpval(pvals);
+        fprintf(1, ['pFDR = %d \n\n'],pFDR)
+        fprintf(1, ['\n\n'])
+        
+        
+        pvals=[];
+       
+        figOffset=figOffset+8;
+        maxlP=-200;
+        minlP=200;
+        
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                for evNo=1:length(eventType)
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        if sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))>0
+                            CI=[];
+                            CI = bootci(1000, {@mean, wave_logP_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo),:)})';
+                            maxlP=max([maxlP max(CI(:))]);
+                            minlP=min([minlP min(CI(:))]);
+                        end
+                    end
+                end
+            end
+        end
+        
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
+            
+            %Plot the average
+            try
+                close(bwii+figOffset)
+            catch
+            end
+            hFig=figure(bwii+figOffset);
+            
+            set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            
+            set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+            hold on
+            
+            
+            ii_gr_included=0;
+            
+            fprintf(1, ['\n\n'])
+            fprintf(1, ['ANOVAN for delta dB power per mouse per electrode, mouse as random factor\n\n'])
+            
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                subplot(1,2,grNo)
+                hold on
+                for evNo=1:length(eventType)
+                    
+                    per_included=0;
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+  
+                        if sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo))>0
+                            
+                            include_group=1;
+                            
+                            per_included=per_included+1;
+                            
+                            mean_wave_logP=[];
+                            mean_wave_logP=mean(wave_logP_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo),:),1);
+                            
+                            CI=[];
+                            CI = bootci(1000, {@mean, wave_logP_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo),:)})';
+                            maxlP=max([maxlP max(CI(:))]);
+                            minlP=min([minlP min(CI(:))]);
+                            CI(:,1)= mean_wave_logP'-CI(:,1);
+                            CI(:,2)=CI(:,2)- mean_wave_logP';
+                             
+                            if evNo==1
+                                if per_ii==1
+                                    [hlCR, hpCR] = boundedline(out_times',mean_wave_logP', CI, 'r');
+                                else
+                                    [hlCR, hpCR] = boundedline(out_times',mean_wave_logP', CI, 'm');
+                                end
+                            else
+                                 if per_ii==1
+                                    [hlCR, hpCR] = boundedline(out_times',mean_wave_logP', CI, 'b');
+                                else
+                                    [hlCR, hpCR] = boundedline(out_times',mean_wave_logP', CI, 'c');
+                                end
+                            end
+                            this_wave_logP=[];
+                            this_wave_logP=wave_logP_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_group_no_per_mouse==grNo),:);
+                            
+                            
+                        end
+                    end
+                 
+                    
+                end
+                
+                xlim([-0.2 0.2])
+                xlabel('lag (sec)')
+                ylabel('ERWA logP (dB)')
+                ylim([minlP-0.1*(maxlP-minlP) maxlP+0.1*(maxlP-minlP)])
+                title([handles_drgb.drgbchoices.group_no_names{grNo}])
+                if grNo==1
+                    annotation('textbox',[0.15 0.75 0.3 0.1],'String','Proficient S+','FitBoxToText','on','Color','r','LineStyle','none');
+                    annotation('textbox',[0.15 0.72 0.3 0.1],'String','Naive S+','FitBoxToText','on','Color','m','LineStyle','none');
+                    annotation('textbox',[0.15 0.69 0.3 0.1],'String','Proficient S-','FitBoxToText','on','Color','b','LineStyle','none');
+                    annotation('textbox',[0.15 0.66 0.3 0.1],'String','Naive S-','FitBoxToText','on','Color','c','LineStyle','none');
+                end
+            end
+            
+            suptitle([freq_names{bwii} ' average peak ERWA delta dB power per mouse, per electrode'])
+            
+            
+        end
+        
+ 
+        
+        %Now plot the histograms and the average per mouse LFP power
+        %computed per mouse
+        figOffset=figOffset+4;
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
+            %Plot the average
+            
+            try
+                close(bwii+figOffset)
+            catch
+            end
+            hFig=figure(bwii+figOffset);
+            set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            
+            
+            
+            set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+            hold on
+            
+            per_mouse_data_wave_logP=[];
+            per_mouse_prof_naive=[];
+            per_mouse_events=[];
+            per_mouse_groups=[];
+            
+            bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            fprintf(1, ['\n\n'])
+            fprintf(1, ['ANOVAN for peak ERWA dB power per mouse, electrode average\n\n'])
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        %                         bar_offset=21-evNo*3+(2-per_ii);
+                        
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(evNo-1);
+                        else
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
+                        end
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        %Compute per mouse avearge for this group
+                        no_mice_for_this_group=0;
+                        each_mouse_average_wave_logP=[];
+                        for mouseNo=1:max(wave_logP_mouseNo_per_mouse)
+                            if sum((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_mouseNo_per_mouse==mouseNo)&(wave_logP_group_no_per_mouse==grNo))>0
+                                no_mice_for_this_group=no_mice_for_this_group+1;
+                                each_mouse_average_wave_logP(no_mice_for_this_group)=mean(wave_logPpeak_per_mouse((wave_logP_perii_per_mouse==per_ii)&(wave_logP_evNo_per_mouse==evNo)&(wave_logP_bwii_per_mouse==bwii)&(wave_logP_mouseNo_per_mouse==mouseNo)&(wave_logP_group_no_per_mouse==grNo)));
+                            end
+                        end
+                        
+                        if no_mice_for_this_group>0
+                            
+                            include_group=1;
+                            
+                            if per_ii==1
+                                bar(bar_offset,mean(each_mouse_average_wave_logP),'r','LineWidth', 3)
+                            else
+                                bar(bar_offset,mean(each_mouse_average_wave_logP),'b','LineWidth', 3)
+                            end
+                            
+                            
+                            %In the future add lines linking the points
+                            plot((bar_offset)*ones(1,no_mice_for_this_group),each_mouse_average_wave_logP,'o',...
+                                'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                            
+                            %Average and CI
+                            plot(bar_offset,mean(each_mouse_average_wave_logP),'ok','LineWidth', 3)
+                            if no_mice_for_this_group>2
+                                CI = bootci(1000, {@mean, each_mouse_average_wave_logP},'type','cper');
+                                plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                            end
+                            
+                            
+                            %Save data for anovan
+                            per_mouse_data_wave_logP=[per_mouse_data_wave_logP each_mouse_average_wave_logP];
+                            per_mouse_prof_naive=[per_mouse_prof_naive per_ii*ones(1,no_mice_for_this_group)];
+                            per_mouse_events=[per_mouse_events evNo*ones(1,no_mice_for_this_group)];
+                            per_mouse_groups=[per_mouse_groups grNo*ones(1,no_mice_for_this_group)];
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+            if sum(eventType==3)>0
+                title([freq_names{bwii} ' auROC peak ERWA dB power per mouse, electrode average'])
+            else
+                title([freq_names{bwii} ' auROC peak ERWA dB power per mouse, electrode avearage concentrations two steps appart'])
+            end
+            
+            
+            
+            %Annotations identifying groups
+            x_interval=0.8/ii_gr_included;
+            for ii=1:ii_gr_included
+                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.8 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+            %x labels
+            to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+            sorted_A=sortrows(to_sort);
+            sorted_bar_lab_loc=sorted_A(:,1);
+            for ii=1:length(bar_lab_loc)
+                sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+            end
+            xticks(sorted_bar_lab_loc)
+            xticklabels(sorted_bar_labels)
+            
+            if sum(eventType==3)==0
+                xlabel('Concentration (%)')
+            end
+            
+            
+            ylabel('peak ERWA power (dB)')
+            
+            
+            
+            %Calculate anovan for inteaction
+            
+            
+            [p,tbl,stats]=anovan(per_mouse_data_wave_logP,{per_mouse_prof_naive per_mouse_events per_mouse_groups},'varnames',{'proficient_vs_naive','events','groups'},'display','off');
+            fprintf(1, ['p value for anovan peak ERWA dB power histogram per mouse, electrode avearage for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
+            fprintf(1, ['p value for anovan peak ERWA dB power histogram  per mouse, electrode avearage for events ' freq_names{bwii} '= %d \n'],  p(2));
+            fprintf(1, ['p value for anovan peak ERWA dB power histogram  per mouse, electrode avearage for groups ' freq_names{bwii} '= %d \n\n'],  p(2));
+            
+            
+            
+        end
+        fprintf(1, ['\n\n'])
+        
+        
+        
+        
+        %Display the auROC for all trials per mouse (per electrode) for for concentrations separated by two log steps
+        figOffset=figOffset+4;
+        for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
+            %Plot the average
+            
+            try
+                close(bwii+figOffset)
+            catch
+            end
+            hFig=figure(bwii+figOffset);
+            
+            set(hFig, 'units','normalized','position',[.1 .5 .7 .4])
+            
+            set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+            hold on
+            
+            data_auROC=[];
+            prof_naive=[];
+            within_between=[];
+            mice=[];
+            groups=[];
+            
+            bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            fprintf(1, ['\n\n'])
+            fprintf(1, ['ANOVAN for auROC peak ERWA dB power per mouse per electrode\n\n'])
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for between=0:1
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        %bar_offset=21-evNo*3+(2-per_ii);
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*2)+(2-(per_ii-1))+3*(between-1);
+                        else
+                            bar_offset=(grNo-1)*(3.5*2)+(2-(per_ii-1))+3*(2-between);
+                        end
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        if sum((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))>0
+                            
+                            include_group=1;
+                            
+                            
+                            if per_ii==1
+                                bar(bar_offset,mean(auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))),'r','LineWidth', 3)
+                            else
+                                bar(bar_offset,mean(auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))),'b','LineWidth', 3)
+                            end
+                            
+                            %Individual points; in the future add lines linking the
+                            %points?
+                            plot((bar_offset)*ones(1,sum((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))),...
+                                auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2)),'o',...
+                                'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                            
+                            %Average and CI
+                            plot(bar_offset,mean(auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))),'ok','LineWidth', 3)
+                            CI = bootci(1000, {@mean, auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))},'type','cper');
+                            plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                            
+                            %Save data for anovan
+                            data_auROC=[data_auROC auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))];
+                            prof_naive=[prof_naive per_ii*ones(1,sum((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2)))];
+                            within_between=[within_between between*ones(1,sum((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2)))];
+                            mice=[mice ROCmouse((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2))];
+                            groups=[groups grNo*ones(1,sum((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROC_between==between)&(ROCgroups==grNo)&(ROC_neighbor==2)))];
+                        end
+                    end
+                    if include_group==1
+                        bar_lab_loc=[bar_lab_loc mean(these_offsets)];
+                        no_ev_labels=no_ev_labels+1;
+                        if sum(eventType==3)==0
+                            if between==0
+                                bar_labels{no_ev_labels}='within';
+                            else
+                                bar_labels{no_ev_labels}='between';
+                            end
+                            
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+            
+            title([freq_names{bwii} ' auROC peak ERWA dB power per mouse, per electrode'])
+            
+            %Annotations identifying groups
+            
+            if sum(eventType==3)==0
+                x_interval=0.8/ii_gr_included;
+                for ii=1:ii_gr_included
+                    annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.8 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+                end
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+            %x labels
+            if sum(eventType==3)==0
+                to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+                sorted_A=sortrows(to_sort);
+                sorted_bar_lab_loc=sorted_A(:,1);
+                for ii=1:length(bar_lab_loc)
+                    sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+                end
+                xticks(sorted_bar_lab_loc)
+                xticklabels(sorted_bar_labels)
+            else
+                for ii=1:ii_gr_included
+                    bar_labels{ii}=handles_drgb.drgbchoices.group_no_names{ groups_included(ii)};
+                end
+                xticks(bar_lab_loc)
+                xticklabels(bar_labels)
+            end
+            
+            
+            
+            ylabel('auROC')
+            
+            if sum(eventType==3)>0
+                %S+ S-
+                %Calculate anovan for inteaction
+                fprintf(1, ['ANOVAN for auROC peak ERWA dB power per mouse per electrode for concentrations separated by two steps, mouse random factor\n'])
+                [p,tbl,stats]=anovan(data_auROC,{prof_naive groups mice},'varnames',{'proficient_vs_naive','groups','mice'},'display','off','random',3);
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(2));
+                
+                %Calculate anovan for inteaction
+                fprintf(1, ['ANOVAN for auROC peak ERWA dB power per mouse per electrode for concentrations separated by two steps\n'])
+                [p,tbl,stats]=anovan(data_auROC,{prof_naive groups},'varnames',{'proficient_vs_naive','groups'},'display','off');
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(2));
+            else
+                %Calculate anovan for inteaction
+                fprintf(1, ['ANOVAN for auROC per mouse per electrode for concentrations separated by two steps, mouse random factor\n'])
+                [p,tbl,stats]=anovan(data_auROC,{prof_naive within_between groups mice},'varnames',{'proficient_vs_naive','within_between','groups','mice'},'display','off','random',4);
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for within vs between ' freq_names{bwii} '= %d \n'],  p(2));
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(3));
+                
+                
+                %Calculate anovan for inteaction
+                fprintf(1, ['ANOVAN for auROC per mouse per electrode for concentrations separated by two steps\n'])
+                [p,tbl,stats]=anovan(data_auROC,{prof_naive within_between groups},'varnames',{'proficient_vs_naive','within_between','groups'},'display','off');
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for naive vs proficient for ' freq_names{bwii} '= %d \n'],  p(1));
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for within vs between ' freq_names{bwii} '= %d \n'],  p(2));
+                fprintf(1, ['p value for anovan auROC peak ERWA dB power per mouse per electrode for groups for ' freq_names{bwii} '= %d \n\n'],  p(3));
+                
+            end
+        end
+        
+        fprintf(1, ['\n\n'])
+        
+        
+        
+        %Display cumulative histograms for the auROC for all trials per mouse (per electrode) for for concentrations separated by two log steps
+        %This only works for Daniel's NRG, we have to modify in the future
+        pvals=[];
+        if sum(eventType==3)>0
+            figOffset=figOffset+4;
+            for bwii=1:no_bandwidths    %for bandwidths (theta, beta, low gamma, high gamma)
+                %Plot the average
+                
+                try
+                    close(bwii+figOffset)
+                catch
+                end
+                hFig=figure(bwii+figOffset);
+                
+                set(hFig, 'units','normalized','position',[.2 .2 .6 .6])
+                
+                set(gca,'FontName','Arial','FontSize',12,'FontWeight','Bold',  'LineWidth', 2)
+                hold on
+                
+                ii_rank=0;
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    include_group=0;
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        if sum((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROCgroups==grNo))>0
+                            
+                            include_group=1;
+                            
+                            
+                            if per_ii==1
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROCgroups==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0],'LineWidth',3)
+                                else
+                                    [f_aic,x_aic] = drg_ecdf(auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROCgroups==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1],'LineWidth',3)
+                                end
+                            else
+                                if grNo==1
+                                    [f_aic,x_aic] = drg_ecdf(auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROCgroups==grNo)));
+                                    plot(x_aic,f_aic,'Color',[1 0 0])
+                                else
+                                    [f_aic,x_aic] = drg_ecdf(auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROCgroups==grNo)));
+                                    plot(x_aic,f_aic,'Color',[0 0 1])
+                                end
+                            end
+                            
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            ranksum_auROC(ii_rank).auROC=auROC((ROCper_ii==per_ii)&(ROCbandwidth==bwii)&(ROCgroups==grNo));
+                            ranksum_auROC(ii_rank).per_ii=per_ii;
+                            ranksum_auROC(ii_rank).grNo=grNo;
+                        end
+                    end
+                    
+                    if include_group==1
+                        ii_gr_included=ii_gr_included+1;
+                        groups_included(ii_gr_included)=grNo;
+                    end
+                end
+                
+                title([freq_names{bwii} ' auROC peak ERWA dB power per mouse, per electrode'])
+                
+                legend([handles_drgb.drgbchoices.group_no_names{1} ' proficient'],[handles_drgb.drgbchoices.group_no_names{1} ' naive']...
+                    ,[handles_drgb.drgbchoices.group_no_names{2} ' proficient'],[handles_drgb.drgbchoices.group_no_names{2} ' naive'])
+                
+                xlabel('auROC')
+                ylabel('Cumulative probability')
+                
+                %Now do the ranksums
+                fprintf(1, ['Ranksum or t-test p values for ' freq_names{bwii} '\n'])
+                prof_naive_leg{1}='Proficient';
+                prof_naive_leg{2}='Naive';
+                for ii=1:ii_rank
+                    for jj=ii+1:ii_rank
+                        [p, r_or_t]=drg_ranksum_or_ttest(ranksum_auROC(ii).auROC,ranksum_auROC(jj).auROC);
+                        if r_or_t==0
+                            fprintf(1, ['p value ranksum for ' handles_drgb.drgbchoices.group_no_names{ranksum_auROC(ii).grNo} ' ' prof_naive_leg{ranksum_auROC(ii).per_ii} ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_auROC(jj).grNo} ' ' prof_naive_leg{ranksum_auROC(jj).per_ii} ' =  %d\n'],p)
+                        else
+                            fprintf(1, ['p value t-test for ' handles_drgb.drgbchoices.group_no_names{ranksum_auROC(ii).grNo} ' ' prof_naive_leg{ranksum_auROC(ii).per_ii} ' vs ' ...
+                                handles_drgb.drgbchoices.group_no_names{ranksum_auROC(jj).grNo} ' ' prof_naive_leg{ranksum_auROC(jj).per_ii} ' =  %d\n'],p)
+                        end
+                        pvals=[pvals p];
+                    end
+                end
+                fprintf(1, ['\n\n'])
+                
+            end
+        end
+        fprintf(1, ['\n\n'])
+        pFDR = drsFDRpval(pvals);
+        fprintf(1, ['pFDR = %d \n\n'],pFDR)
+        
+        
+        pffft=1;
+      
+        case 23
+        %23 Oscillatory power at the peak and trough of the PAC
+        
+        mean_PACpower_No_per_mouse=0;
+        
+        mean_PACpower_No=0;
+        mean_peakPACpower=[];
+        mean_troughPACpower=[];
+        mean_PACpower_perii=[];
+        mean_PACpower_evNo=[];
+        mean_PACpower_pacii=[];
+        mean_PACpower_fileNo=[];
+        per_session_group_no=[];
+        mean_VL=[];
+        mean_VA=[];
+        mean_PA=[];
+        
+        
+        fprintf(1, ['PAC power analysis for Justin''s paper\n\n'])
+        p_vals=[];
+        no_files=max(files);
+        
+        if exist('which_electrodes')==0
+            which_electrodes=[1:16];
+        end
+        
+        
+        szpc=size(percent_windows);
+        for per_ii=1:szpc(1)
+            
+            
+            
+            for mouseNo=1:max(handles_drgb.drgbchoices.mouse_no)
+                mouse_has_files=0;
+                for elec=1:16
+                    if sum(which_electrodes==elec)>0
+                        
+                        theseEvNos_thisMouse_thisElec=[];
+                        for evNo=1:length(eventType)
+                            for pacii=1:no_pacii
+                                for group_no=1:max(handles_drgb.drgbchoices.group_no)
+                                    theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv=0;
+                                end
+                            end
+                        end
+                        
+                        
+                        for fileNo=1:no_files
+                            %If this file is in the list of files the user wants to process in drgAnalysisBatchLFP continue
+                            if sum(files==fileNo)>0
+                                if handles_drgb.drgbchoices.mouse_no(fileNo)==mouseNo
+                                    lfpodNo=find((files_per_lfp==fileNo)&(elec_per_lfp==elec)&(window_per_lfp==winNo));
+                                    lfpodRefNo=find((files_per_lfp==fileNo)&(elec_per_lfp==elec)&(window_per_lfp==refWin));
+                                    
+                                    if (~isempty(handles_drgb.drgb.lfpevpair(lfpodNo)))&(~isempty(handles_drgb.drgb.lfpevpair(lfpodRefNo)))
+                                        
+                                        
+                                        if (~isempty(handles_drgb.drgb.lfpevpair(lfpodNo).PAC))&(~isempty(handles_drgb.drgb.lfpevpair(lfpodRefNo).PAC))
+                                            
+                                            percent_mask=[];
+                                            percent_mask=logical((handles_drgb.drgb.lfpevpair(lfpodNo).PAC(1).perCorrPAC>=percent_windows(per_ii,1))...
+                                                &(handles_drgb.drgb.lfpevpair(lfpodNo).PAC(1).perCorrPAC<=percent_windows(per_ii,2)));
+                                            
+                                            if ~isempty(percent_mask)
+                                                
+                                                
+                                                for evNo=1:length(eventType)
+                                                    
+                                                    trials_in_event_Ev=[];
+                                                    trials_in_event_Ev=(handles_drgb.drgb.lfpevpair(lfpodNo).PAC(1).which_eventPAC(eventType(evNo),:)==1)&percent_mask;
+                                                    
+                                                    if (sum(trials_in_event_Ev)>=1)
+                                                        
+                                                        %Do per bandwidth analysis
+                                                        for pacii=1:no_pacii
+                                                            
+                                                            group_no=handles_drgb.drgbchoices.group_no(fileNo);
+                                                            
+                                                            %Enter the PACpower
+                                                            this_peakPACpower_Ev=zeros(sum(trials_in_event_Ev),1);
+                                                            this_peakPACpower_Ev=handles_drgb.drgb.lfpevpair(lfpodNo).PAC(pacii).meanPeakPower(trials_in_event_Ev)-handles_drgb.drgb.lfpevpair(lfpodRefNo).PAC(pacii).meanPeakPower(trials_in_event_Ev);
+                                                            this_troughPACpower_Ev=zeros(sum(trials_in_event_Ev),1);
+                                                            this_troughPACpower_Ev=handles_drgb.drgb.lfpevpair(lfpodNo).PAC(pacii).meanTroughPower(trials_in_event_Ev)-handles_drgb.drgb.lfpevpair(lfpodRefNo).PAC(pacii).meanTroughPower(trials_in_event_Ev);
+                                                            
+                                                            theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).this_peakPACpower_Ev(theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv+1 ...
+                                                                :theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv+sum(trials_in_event_Ev))=this_peakPACpower_Ev;
+                                                            theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).this_troughPACpower_Ev(theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv+1 ...
+                                                                :theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv+sum(trials_in_event_Ev))=this_troughPACpower_Ev;
+                                                            theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).whichMouse(theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv+1:theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv+sum(trials_in_event_Ev))=mouseNo*ones(1,length(this_peakPACpower_Ev));
+                                                            theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv=theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv+sum(trials_in_event_Ev);
+                                                            
+                                                            %Save per session value for peak power
+                                                            mean_PACpower_No=mean_PACpower_No+1;
+                                                            mean_peakPACpower(mean_PACpower_No)=mean(this_peakPACpower_Ev);
+                                                            mean_troughPACpower(mean_PACpower_No)=mean(this_troughPACpower_Ev);
+                                                            mean_PACpower_perii(mean_PACpower_No)=per_ii;
+                                                            mean_PACpower_evNo(mean_PACpower_No)=evNo;
+                                                            mean_PACpower_pacii(mean_PACpower_No)=pacii;
+                                                            mean_PACpower_fileNo(mean_PACpower_No)=fileNo;
+                                                            mean_PACpower_mouse(mean_PACpower_No)=mouseNo;
+                                                            per_session_group_no(mean_PACpower_No)=handles_drgb.drgbchoices.group_no(fileNo);
+                                                            
+                                                            
+                                                            mouse_has_files=1;
+                                                            
+                                                        end
+                                                        
+                                                        
+                                                        fprintf(1, ['%d trials in event No %d succesfully processed for file No %d electrode %d\n'],sum(trials_in_event_Ev), evNo,fileNo,elec);
+                                                        
+                                                    else
+                                                        
+                                                        
+                                                        fprintf(1, ['%d trials in event No %d fewer than minimum trials per event ' evTypeLabels{evNo} ' for file No %d electrode %d\n'],sum(trials_in_event_Ev), min_trials_per_event,fileNo,elec);
+                                                        
+                                                        
+                                                    end
+                                                    
+                                                    
+                                                end
+                                                
+                                            else
+                                                
+                                                fprintf(1, ['Empty percent_mask for file No %d electrode %d\n'],fileNo,elec);
+                                                
+                                            end
+                                            
+                                        else
+                                            
+                                            fprintf(1, ['Empty PAC for file No %d electrode %d\n'],fileNo,elec);
+                                            
+                                        end
+                                        
+                                        
+                                    else
+                                        fprintf(1, ['Empty lfpevpair for file No %d electrode %d\n'],fileNo,elec);
+                                        
+                                        
+                                    end
+                                end %if mouseNo
+                            end
+                        end %fileNo
+                        
+                        if theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).noEv>0
+                            
+                            %Calculate per mouse PAC power
+                            for evNo=1:length(eventType)
+                                for pacii=1:no_pacii
+                                    for group_no=1:max(handles_drgb.drgbchoices.group_no)
+                                        %Calculate per mouse PAC power
+                                        mean_PACpower_No_per_mouse=mean_PACpower_No_per_mouse+1;
+                                        this_mouse_peakPACpower=[];
+                                        this_mouse_peakPACpower=theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).this_peakPACpower_Ev;
+                                        this_mouse_troughPACpower=[];
+                                        this_mouse_troughPACpower=theseEvNos_thisMouse_thisElec(evNo,pacii,group_no).this_troughPACpower_Ev;
+                                        if ~isempty(this_mouse_peakPACpower)
+                                            mean_peakPACpower_per_mouse(mean_PACpower_No_per_mouse)=mean(this_mouse_peakPACpower);
+                                            mean_troughPACpower_per_mouse(mean_PACpower_No_per_mouse)=mean(this_mouse_troughPACpower);
+                                        else
+                                            mean_peakPACpower_per_mouse(mean_PACpower_No_per_mouse)=NaN;
+                                            mean_troughPACpower_per_mouse(mean_PACpower_No_per_mouse)=NaN;
+                                        end
+                                        
+                                        mean_PACpower_perii_per_mouse(mean_PACpower_No_per_mouse)=per_ii;
+                                        mean_PACpower_evNo_per_mouse(mean_PACpower_No_per_mouse)=evNo;
+                                        mean_PACpower_pacii_per_mouse(mean_PACpower_No_per_mouse)=pacii;
+                                        mean_PACpower_mouseNo_per_mouse(mean_PACpower_No_per_mouse)=mouseNo;
+                                        mean_PACpower_electNo_per_mouse(mean_PACpower_No_per_mouse)=elec;
+                                        mean_PACpower_group_no_per_mouse(mean_PACpower_No_per_mouse)=group_no;
+                                        
+                                    end
+                                end
+                            end
+                        end
+                        
+                    end
+                    
+                end
+                
+                if mouse_has_files==1
+                    mouse_included(mouseNo)=1;
+                else
+                    mouse_included(mouseNo)=0;
+                end
+            end
+            
+            
+        end
+        fprintf(1, '\n\n')
+        
+        
+        %Now plot the average peakPACpower for each electrode calculated per mouse
+        %(including all sessions for each mouse)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
+            
+            data_PACpower=[];
+            prof_naive=[];
+            events=[];
+            groups=[];
+            mice=[];
+            
+            %Plot the average
+            try
+                close(pacii)
+            catch
+            end
+            hFig=figure(pacii);
+            
+            set(hFig, 'units','normalized','position',[.1 .2 .7 .7])
+            subplot(2,1,1)
+            hold on
+            
+            bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    for per_ii=1:2
+                        
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(2-evNo);
+                        else
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
+                        end
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        if sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>1
+                            
+                            include_group=1;
+                            
+                            if per_ii==1
+                                bar(bar_offset,mean(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),'r','LineWidth', 3,'EdgeColor','none')
+                            else
+                                bar(bar_offset,mean(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),'b','LineWidth', 3,'EdgeColor','none')
+                            end
+                            
+                            
+                            plot(bar_offset,mean(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),'ok','LineWidth', 3)
+                            plot((bar_offset)*ones(1,sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),...
+                                mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)),'o',...
+                                'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                            
+                            if sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>=2
+                                CI = bootci(1000, {@mean, mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))},'type','cper');
+                                plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                            end
+                            
+                            %Save data for anovan
+                            data_PACpower=[data_PACpower mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))];
+                            prof_naive=[prof_naive per_ii*ones(1,sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))];
+                            events=[events evNo*ones(1,sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))];
+                            groups=[groups grNo*ones(1,sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))];
+                            mice=[mice mean_PACpower_mouseNo_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))];
+                            
+                        end
+                    end
+                    if include_group==1
+                        bar_lab_loc=[bar_lab_loc mean(these_offsets)];
+                        no_ev_labels=no_ev_labels+1;
+                        if sum(eventType==3)>0
+                            bar_labels{no_ev_labels}=evTypeLabels{evNo};
+                        else
+                            bar_labels{no_ev_labels}=num2str(concs(evNo));
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+                
+            end
+            
+            title('Peak PAC power')
+            
+            
+            %Annotations identifying groups
+            x_interval=0.8/ii_gr_included;
+            for ii=1:ii_gr_included
+                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.7 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+            %x labels
+            to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+            sorted_A=sortrows(to_sort);
+            sorted_bar_lab_loc=sorted_A(:,1);
+            for ii=1:length(bar_lab_loc)
+                sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+            end
+            xticks(sorted_bar_lab_loc)
+            xticklabels(sorted_bar_labels)
+            
+            if sum(eventType==3)==0
+                xlabel('Concentration (%)')
+            end
+            
+            ylabel('dB')
+            ylim1(pacii,:)=ylim;
+            
+            %Calculate anovan for inteaction
+            fprintf(1, ['ANOVAN for average peak PAC power for each electrode calculated per mouse with mouse as random factor PAC theta/' freq_names{pacii+1} '\n'])
+            [p,tbl,stats]=anovan(data_PACpower,{prof_naive, events, groups, mice},'varnames',{'proficient_vs_naive','events','groups','mice'},'display','off','random',4);
+            fprintf(1, ['p value for anovan peak PAC power per mouse per electrode for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
+            fprintf(1, ['p value for anovan peak PAC power per mouse per electrode for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
+            fprintf(1, ['p value for anovan peak PAC power per mouse per electrode for groups for PAC theta/' freq_names{pacii+1} '= %d \n\n'],  p(3));
+            
+            %Calculate anovan for inteaction
+            fprintf(1, ['ANOVAN for average peak PAC power for each electrode calculated per mouse without mouse as a factor for PAC theta/' freq_names{pacii+1} '\n'])
+            [p,tbl,stats]=anovan(data_PACpower,{prof_naive, events, groups},'varnames',{'proficient_vs_naive','events','groups'},'display','off');
+            fprintf(1, ['p value for anovan peak PAC power per mouse per electrode for naive vs proficient for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(1));
+            fprintf(1, ['p value for anovan peak PAC power per mouse per electrode for events for PAC theta/' freq_names{pacii+1} '= %d \n'],  p(2));
+            fprintf(1, ['p value for anovan peak PAC power per mouse per electrode for groups for PAC theta/' freq_names{pacii+1} '= %d \n\n'],  p(3));
+            
+        end
+        
+        
+        %Now plot the average troughPACpower for each electrode calculated per mouse
+        %(including all sessions for each mouse)
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
+            
+            data_PACpower=[];
+            prof_naive=[];
+            events=[];
+            groups=[];
+            mice=[];
+            
+            %Plot the average
+           
+            hFig=figure(pacii);
+            subplot(2,1,2)
+            hold on
+            
+            bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    for per_ii=1:2
+                        
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(2-evNo);
+                        else
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
+                        end
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        if sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>1
+                            
+                            include_group=1;
+                            
+                            if per_ii==1
+                                bar(bar_offset,mean(mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),'r','LineWidth', 3,'EdgeColor','none')
+                            else
+                                bar(bar_offset,mean(mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),'b','LineWidth', 3,'EdgeColor','none')
+                            end
+                            
+                            
+                            plot(bar_offset,mean(mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),'ok','LineWidth', 3)
+                            plot((bar_offset)*ones(1,sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))),...
+                                mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)),'o',...
+                                'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                            
+                            if sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>=2
+                                CI = bootci(1000, {@mean, mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))},'type','cper');
+                                plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                            end
+                            
+                            %Save data for anovan
+                            data_PACpower=[data_PACpower mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))];
+                            prof_naive=[prof_naive per_ii*ones(1,sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))];
+                            events=[events evNo*ones(1,sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))];
+                            groups=[groups grNo*ones(1,sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))];
+                            mice=[mice mean_PACpower_mouseNo_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))];
+                            
+                        end
+                    end
+                    if include_group==1
+                        bar_lab_loc=[bar_lab_loc mean(these_offsets)];
+                        no_ev_labels=no_ev_labels+1;
+                        if sum(eventType==3)>0
+                            bar_labels{no_ev_labels}=evTypeLabels{evNo};
+                        else
+                            bar_labels{no_ev_labels}=num2str(concs(evNo));
+                        end
+                    end
+                end
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+            
+            title('Trough PAC power')
+            
+            suptitle(['Average PAC power for each electrode calculated per mouse for PAC theta/' freq_names{pacii+1}])
+            
+            
+            %Annotations identifying groups
+            x_interval=0.8/ii_gr_included;
+            for ii=1:ii_gr_included
+                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.7 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+            %x labels
+            to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+            sorted_A=sortrows(to_sort);
+            sorted_bar_lab_loc=sorted_A(:,1);
+            for ii=1:length(bar_lab_loc)
+                sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+            end
+            xticks(sorted_bar_lab_loc)
+            xticklabels(sorted_bar_labels)
+            
+            if sum(eventType==3)==0
+                xlabel('Concentration (%)')
+            end
+            
+            ylabel('dB')
+            ylim2=ylim;
+            ylim([min([ylim1(pacii,1) ylim2(1)]) max([ylim1(pacii,2) ylim2(2)])])
+            
+        end
+        
+        %Now do the cumulative histograms and ranksums for PAC power for each electrode calculated with all sessons per mouse
+        pvals=[];
+        legends=[];
+        prof_naive_leg{1}='Naive';
+        prof_naive_leg{2}='Proficient';
+        
+        
+        for pacii=1:no_pacii
+            
+            %Find max and min to use for xlim
+            maxpower=-200;
+            minpower=200;
+            for evNo=1:length(eventType)
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        if sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>1
+                            maxpower=max([maxpower max(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))]);
+                            minpower=min([minpower min(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)))]);
+                        end
+                    end 
+                end
+            end
+            
+            try
+                close(pacii+3)
+            catch
+            end
+            hFig=figure(pacii+3);
+            
+            
+            set(hFig, 'units','normalized','position',[.1 .1 .7 .8])
+            
+            
+            %Plot the peak PAC power
+            ii_rank=0;
+            input_data=[];
+            for evNo=1:length(eventType)
+                
+                subplot(2,2,evNo)
+                hold on
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        if sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>1
+                            
+                            [f_mi,x_mi] = drg_ecdf(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)));
+                            cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_mi=f_mi;
+                            cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_mi=x_mi;
+                            if grNo==1
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p1=plot(x_mi,f_mi,'Color',[1 0 0],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p2=plot(x_mi,f_mi,'Color',[0 0 1],'LineWidth',3);
+                                end
+                            else
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p3=plot(x_mi,f_mi,'Color',[1 0.7 0.7],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p4=plot(x_mi,f_mi,'Color',[0.7 0.7 1],'LineWidth',3);
+                                end
+                            end
+                            
+                            
+                            %Compute per mouse avearge
+                            each_mouse_average_PACpower=[];
+                            no_mice_included=0;
+                            for mouseNo=1:max(mean_PACpower_mouseNo_per_mouse)
+                                if mouse_included(mouseNo)==1
+                                    if sum(handles_drgb.drgbchoices.group_no(handles_drgb.drgbchoices.mouse_no==mouseNo)==grNo)
+                                        if sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo))>0
+                                            no_mice_included=no_mice_included+1;
+                                            each_mouse_average_PACpower(no_mice_included)=mean(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo)));
+                                        end
+                                    end
+                                end
+                            end
+                            
+                            %Show average per mouse
+                            if no_mice_included>0
+                                for jj=1:length(each_mouse_average_PACpower)
+                                    this_f_mi=[];
+                                    this_f_mi=cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_mi;
+                                    
+                                    this_x_mi=[];
+                                    this_x_mi=cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_mi;
+                                    
+                                    xii_below=find(this_x_mi<each_mouse_average_PACpower(jj),1,'last');
+                                    xii_above=find(this_x_mi>each_mouse_average_PACpower(jj),1,'first');
+                                    
+                                    slope=(this_f_mi(xii_above)-this_f_mi(xii_below))/(this_x_mi(xii_above)-this_x_mi(xii_below));
+                                    intercept=this_f_mi(xii_above)-slope*this_x_mi(xii_above);
+                                    
+                                    this_f=slope*each_mouse_average_PACpower(jj)+intercept;
+                                    
+                                    if grNo==1
+                                        if per_ii==1
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[1 0 0],'MarkerEdge',[1 0 0],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[0 0 1],'MarkerEdge',[0 0 1],'MarkerSize',10)
+                                        end
+                                    else
+                                        if per_ii==1
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[1 0.7 0.7],'MarkerEdge',[1 0.7 0.7],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[0.7 0.7 1],'MarkerEdge',[0.7 0.7 1],'MarkerSize',10)
+                                        end
+                                    end
+                                    
+                                end
+                            end
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            input_data(ii_rank).data=mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo));
+                            input_data(ii_rank).description=[handles_drgb.drgbchoices.group_no_names{grNo} ' ' evTypeLabels{evNo} ' ' prof_naive_leg{per_ii}];
+                         end
+                    end
+                    
+                end
+                
+                title(evTypeLabels{evNo})
+                xlabel('Peak PAC power (dB)')
+                ylabel('Probability')
+                xlim([minpower-0.1*(maxpower-minpower) maxpower+0.1*(maxpower-minpower)])
+            end
+
+            
+            %Now do the ranksums
+            fprintf(1, ['Ranksum or t-test p values for peak PAC power for each electrode calculated per mouse for PAC theta' freq_names{pacii+1} '\n'])
+            output_data = drgMutiRanksumorTtest(input_data);
+
+            fprintf(1, ['\n\n'])
+            
+            
+            %Plot the trough PAC power
+            ii_rank=0;
+            input_data=[];
+            for evNo=1:length(eventType)
+                
+                subplot(2,2,evNo+2)
+                hold on
+                
+                for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                    
+                    
+                    
+                    for per_ii=1:2      %performance bins. blue = naive, red = proficient
+                        
+                        
+                        if sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>1
+                            
+                            [f_mi,x_mi] = drg_ecdf(mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)));
+                            cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_mi=f_mi;
+                            cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_mi=x_mi;
+                            if grNo==1
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p1=plot(x_mi,f_mi,'Color',[1 0 0],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p2=plot(x_mi,f_mi,'Color',[0 0 1],'LineWidth',3);
+                                end
+                            else
+                                if per_ii==1
+                                    legends.pacii(pacii).evNo(evNo).p3=plot(x_mi,f_mi,'Color',[1 0.7 0.7],'LineWidth',3);
+                                else
+                                    legends.pacii(pacii).evNo(evNo).p4=plot(x_mi,f_mi,'Color',[0.7 0.7 1],'LineWidth',3);
+                                end
+                            end
+                            
+                            %Compute per mouse avearge
+                            each_mouse_average_PACpower=[];
+                            no_mice_included=0;
+                            for mouseNo=1:max(mean_PACpower_mouseNo_per_mouse)
+                                if mouse_included(mouseNo)==1
+                                    if sum(handles_drgb.drgbchoices.group_no(handles_drgb.drgbchoices.mouse_no==mouseNo)==grNo)
+                                        if sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo))>0
+                                            no_mice_included=no_mice_included+1;
+                                            each_mouse_average_PACpower(no_mice_included)=mean(mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo)));
+                                        end
+                                    end
+                                end
+                            end
+                            
+                            %Show average per mouse
+                            if no_mice_included>0
+                                for jj=1:length(each_mouse_average_PACpower)
+                                    this_f_mi=[];
+                                    this_f_mi=cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).f_mi;
+                                    
+                                    this_x_mi=[];
+                                    this_x_mi=cum_histodB.pacii(pacii).grNo(grNo).evNo(evNo).per_ii(per_ii).x_mi;
+                                    
+                                    xii_below=find(this_x_mi<each_mouse_average_PACpower(jj),1,'last');
+                                    xii_above=find(this_x_mi>each_mouse_average_PACpower(jj),1,'first');
+                                    
+                                    slope=(this_f_mi(xii_above)-this_f_mi(xii_below))/(this_x_mi(xii_above)-this_x_mi(xii_below));
+                                    intercept=this_f_mi(xii_above)-slope*this_x_mi(xii_above);
+                                    
+                                    this_f=slope*each_mouse_average_PACpower(jj)+intercept;
+                                    
+                                    if grNo==1
+                                        if per_ii==1
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[1 0 0],'MarkerEdge',[1 0 0],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[0 0 1],'MarkerEdge',[0 0 1],'MarkerSize',10)
+                                        end
+                                    else
+                                        if per_ii==1
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[1 0.7 0.7],'MarkerEdge',[1 0.7 0.7],'MarkerSize',10)
+                                        else
+                                            plot(each_mouse_average_PACpower(jj),this_f,'o','MarkerFace',[0.7 0.7 1],'MarkerEdge',[0.7 0.7 1],'MarkerSize',10)
+                                        end
+                                    end
+                                    
+                                end
+                            end
+                            
+                            %Save data for ranksum
+                            ii_rank=ii_rank+1;
+                            input_data(ii_rank).data=mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo));
+                            input_data(ii_rank).description=[handles_drgb.drgbchoices.group_no_names{grNo} ' ' evTypeLabels{evNo} ' ' prof_naive_leg{per_ii}];
+                             end
+                    end
+                    
+                end
+                
+                title(evTypeLabels{evNo})
+                xlabel('Trough PAC power (dB)')
+                ylabel('Probability')
+                xlim([minpower-0.1*(maxpower-minpower) maxpower+0.1*(maxpower-minpower)])
+            end
+
+            suptitle(['Average PAC power for each electrode calculated per  for PAC theta/' freq_names{pacii+1}])
+            
+            %Now do the ranksums
+            fprintf(1, ['Ranksum or t-test p values for trough PAC power for each electrode calculated per mouse for PAC theta' freq_names{pacii+1} '\n'])
+            output_data = drgMutiRanksumorTtest(input_data);
+
+            fprintf(1, ['\n\n'])
+
+        end
+        
+
+        %Now plot the average PAC power per mouse averaged over electrodes
+        for pacii=1:no_pacii    %for amplitude bandwidths (beta, low gamma, high gamma)
+            
+            
+            %Plot the average PAC power per mouse averaged over electrodes
+            try
+                close(pacii+6)
+            catch
+            end
+            hFig=figure(pacii+6);
+            set(hFig, 'units','normalized','position',[.1 .5 .7 .7])
+            
+            %Peak PAC power
+            subplot(2,1,1)
+            hold on
+            
+            
+            %             bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            ii_rank=0;
+            input_data=[];
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    for per_ii=1:2
+                        
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(2-evNo);
+                        else
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
+                        end
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        if sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>1
+                            
+                            include_group=1;
+                            
+                            %Compute per mouse avearge
+                            each_mouse_average_PACpower=[];
+                            no_mice_included=0;
+                            for mouseNo=1:max(mean_PACpower_mouseNo_per_mouse)
+                                if mouse_included(mouseNo)==1
+                                    if sum(handles_drgb.drgbchoices.group_no(handles_drgb.drgbchoices.mouse_no==mouseNo)==grNo)
+                                        if sum((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo))>0
+                                            no_mice_included=no_mice_included+1;
+                                            each_mouse_average_PACpower(no_mice_included)=mean(mean_peakPACpower_per_mouse((~isnan(mean_peakPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo)));
+                                        end
+                                    end
+                                end
+                            end
+                            if no_mice_included>0
+                                
+                                include_group=1;
+                                
+                                if per_ii==1
+                                    bar(bar_offset,mean(each_mouse_average_PACpower),'r','LineWidth', 3,'EdgeColor','none')
+                                else
+                                    bar(bar_offset,mean(each_mouse_average_PACpower),'b','LineWidth', 3,'EdgeColor','none')
+                                end
+                                
+                                
+                                plot(bar_offset,mean(each_mouse_average_PACpower),'ok','LineWidth', 3)
+                                plot((bar_offset)*ones(1,length(each_mouse_average_PACpower)),each_mouse_average_PACpower,'o',...
+                                    'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                                
+                                if length(each_mouse_average_PACpower)>2
+                                    CI = bootci(1000, {@mean, each_mouse_average_PACpower},'type','cper');
+                                    plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                                end
+                                
+                                
+                                
+                                %Save data for ranksum
+                                ii_rank=ii_rank+1;
+                                input_data(ii_rank).data=each_mouse_average_PACpower;
+                                input_data(ii_rank).description=[handles_drgb.drgbchoices.group_no_names{grNo} ' ' evTypeLabels{evNo} ' ' prof_naive_leg{per_ii}];
+                                
+                            end
+                        end
+                    end
+                end
+                
+                
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+            
+            title('Peak PAC power')
+
+            %Annotations identifying groups
+            x_interval=0.8/ii_gr_included;
+            for ii=1:ii_gr_included
+                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.7 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+   
+            xticks(sorted_bar_lab_loc)
+            xticklabels(sorted_bar_labels)
+            
+            if sum(eventType==3)==0
+                xlabel('Concentration (%)')
+            end
+            
+            ylabel('dB')
+            
+            %Now do the ranksums
+            fprintf(1, ['Ranksum or t-test p values for peak PAC power per mouse averaged over electrodes for PAC theta PAC theta' freq_names{pacii+1} '\n'])
+            output_data = drgMutiRanksumorTtest(input_data);
+            
+            %Trough power
+            subplot(2,1,2)
+            hold on
+            
+            
+            %             bar_lab_loc=[];
+            no_ev_labels=0;
+            ii_gr_included=0;
+            
+            ii_rank=0;
+            input_data=[];
+            
+            for grNo=1:max(handles_drgb.drgbchoices.group_no)
+                
+                include_group=0;
+                
+                for evNo=1:length(eventType)
+                    
+                    for per_ii=1:2
+                        
+                        if sum(eventType==3)>0
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(2-evNo);
+                        else
+                            bar_offset=(grNo-1)*(3.5*length(eventType))+(2-(per_ii-1))+3*(length(eventType)-evNo);
+                        end
+                        
+                        these_offsets(per_ii)=bar_offset;
+                        
+                        if sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo))>1
+                            
+                            include_group=1;
+                            
+                            %Compute per mouse avearge
+                            each_mouse_average_PACpower=[];
+                            no_mice_included=0;
+                            for mouseNo=1:max(mean_PACpower_mouseNo_per_mouse)
+                                if mouse_included(mouseNo)==1
+                                    if sum(handles_drgb.drgbchoices.group_no(handles_drgb.drgbchoices.mouse_no==mouseNo)==grNo)
+                                        if sum((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo))>0
+                                            no_mice_included=no_mice_included+1;
+                                            each_mouse_average_PACpower(no_mice_included)=mean(mean_troughPACpower_per_mouse((~isnan(mean_troughPACpower_per_mouse))&(mean_PACpower_perii_per_mouse==per_ii)&(mean_PACpower_pacii_per_mouse==pacii)&(mean_PACpower_evNo_per_mouse==evNo)&(mean_PACpower_group_no_per_mouse==grNo)&(mean_PACpower_mouseNo_per_mouse==mouseNo)));
+                                        end
+                                    end
+                                end
+                            end
+                            if no_mice_included>0
+                                
+                                include_group=1;
+                                
+                                if per_ii==1
+                                    bar(bar_offset,mean(each_mouse_average_PACpower),'r','LineWidth', 3,'EdgeColor','none')
+                                else
+                                    bar(bar_offset,mean(each_mouse_average_PACpower),'b','LineWidth', 3,'EdgeColor','none')
+                                end
+                                
+                                
+                                plot(bar_offset,mean(each_mouse_average_PACpower),'ok','LineWidth', 3)
+                                plot((bar_offset)*ones(1,length(each_mouse_average_PACpower)),each_mouse_average_PACpower,'o',...
+                                    'MarkerFaceColor',[0.7 0.7 0.7],'MarkerEdgeColor',[0.7 0.7 0.7])
+                                
+                                if length(each_mouse_average_PACpower)>2
+                                    CI = bootci(1000, {@mean, each_mouse_average_PACpower},'type','cper');
+                                    plot([bar_offset bar_offset],CI,'-k','LineWidth',3)
+                                end
+                                
+                                
+                                
+                                %Save data for ranksum
+                                ii_rank=ii_rank+1;
+                                input_data(ii_rank).data=each_mouse_average_PACpower;
+                                input_data(ii_rank).description=[handles_drgb.drgbchoices.group_no_names{grNo} ' ' evTypeLabels{evNo} ' ' prof_naive_leg{per_ii}];
+                                
+                            end
+                        end
+                    end
+                end
+                
+                
+                if include_group==1
+                    ii_gr_included=ii_gr_included+1;
+                    groups_included(ii_gr_included)=grNo;
+                end
+            end
+            
+            title('Trough PAC power')
+            suptitle(['Average PAC power per mouse averaged over all electrodes for PAC theta/' freq_names{pacii+1}])
+
+            %Annotations identifying groups
+            x_interval=0.8/ii_gr_included;
+            for ii=1:ii_gr_included
+                annotation('textbox',[0.7*x_interval+x_interval*(ii-1) 0.7 0.3 0.1],'String',handles_drgb.drgbchoices.group_no_names{ groups_included(ii)},'FitBoxToText','on');
+            end
+            
+            %Proficient/Naive annotations
+            annotation('textbox',[0.15 0.8 0.3 0.1],'String','Proficient','FitBoxToText','on','Color','r','LineStyle','none');
+            annotation('textbox',[0.15 0.75 0.3 0.1],'String','Naive','FitBoxToText','on','Color','b','LineStyle','none');
+            
+            %             %x labels
+            %             to_sort=[bar_lab_loc' [1:length(bar_lab_loc)]'];
+            %             sorted_A=sortrows(to_sort);
+            %             sorted_bar_lab_loc=sorted_A(:,1);
+            %             for ii=1:length(bar_lab_loc)
+            %                 sorted_bar_labels{ii}=bar_labels{sorted_A(ii,2)};
+            %             end
+            xticks(sorted_bar_lab_loc)
+            xticklabels(sorted_bar_labels)
+            
+            if sum(eventType==3)==0
+                xlabel('Concentration (%)')
+            end
+            
+            ylabel('dB')
+            
+            %Now do the ranksums
+            fprintf(1, ['Ranksum or t-test p values for trough PAC power per mouse averaged over electrodes for PAC theta PAC theta' freq_names{pacii+1} '\n'])
+            output_data = drgMutiRanksumorTtest(input_data);
+            
+        end
+        
+        pfft=1;
         
 end
 

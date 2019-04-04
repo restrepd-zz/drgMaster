@@ -4,8 +4,6 @@ function drgLFPwaveTimecourse(handles)
 
 [t,freq,all_Power,all_Power_ref, all_Power_timecourse, this_trialNo]=drgGetLFPwavePowerForThisEvTypeNo(handles);
 
-
-
 %Timecourse doing average after log
 %Get max and min
 if handles.subtractRef==0
@@ -27,8 +25,8 @@ if handles.subtractRef==0
         minLogPper=prctile(log_P_timecourse(:),1);
         %Note: Diego added this on purpose to limit the range to 10 dB
         %This results in emphasizing changes in the top 10 dB
-        if maxLogP-minLogP>12
-            minLogPper=maxLogP-12;
+        if maxLogPper-minLogPper>12
+            minLogPper=maxLogPper-12;
         end
     else
         maxLogPper=handles.maxLogP;
@@ -57,16 +55,10 @@ else
     
     max_delta=16;
     if handles.autoscale==1
-        maxLogP=prctile(log_P_timecourse(:)-log_P_timecourse_ref(:),99);
-        minLogP=prctile(log_P_timecourse(:)-log_P_timecourse_ref(:),1);
-        %Note: Diego added this on purpose to limit the range to 10 dB
-        %This results in emphasizing changes in the top 10 dB
-        if maxLogP-minLogP>max_delta
-            minLogP=maxLogP-max_delta;
-        end
-        
-        maxLogPper=prctile(log_P_per_trial_timecourse_sub(:),99);
-        minLogPper=prctile(log_P_per_trial_timecourse_sub(:),1);
+
+        deltaLogP=log_P_timecourse'-log_P_timecourse_ref';
+        maxLogPper=prctile(deltaLogP(:),99);
+        minLogPper=prctile(deltaLogP(:),1);
         %Note: Diego added this on purpose to limit the range to 10 dB
         %This results in emphasizing changes in the top 10 dB
         if maxLogPper-minLogPper>max_delta
@@ -85,6 +77,13 @@ end
 
 if ~isempty(this_trialNo)
     
+    for ii=1:12
+        try
+            close(ii)
+        catch
+        end
+    end
+    
     try
         close 1
     catch
@@ -92,7 +91,7 @@ if ~isempty(this_trialNo)
     
     %Plot the timecourse
     hFig1 = figure(1);
-    set(hFig1, 'units','normalized','position',[.07 .1 .75 .3])
+    set(hFig1, 'units','normalized','position',[.07 .05 .75 .3])
     if handles.subtractRef==0
         drg_pcolor(repmat(t,length(freq),1)',repmat(freq,length(t),1),log_P_timecourse')
     else
@@ -125,7 +124,7 @@ if ~isempty(this_trialNo)
         
         
         for ilick=1:stamped_lick_ii
-            plot([these_stamped_lick_times(ilick)+t(1) these_stamped_lick_times(ilick)+t(1)],[ffrom freq(end)],'-k','LineWidth',3)
+            plot([these_stamped_lick_times(ilick) these_stamped_lick_times(ilick)],[ffrom freq(end)],'-k','LineWidth',3)
         end
     end
     
@@ -169,7 +168,7 @@ if ~isempty(this_trialNo)
     ylabel('Frequency*trialNo');
     title(['Power (dB, wavelet) timecourse per trial ' handles.drg.session(1).draq_d.eventlabels{handles.evTypeNo}])
     
-        try
+    try
         close 6
     catch
     end
@@ -191,7 +190,7 @@ if ~isempty(this_trialNo)
     end
     
     hFig7 = figure(7);
-    set(hFig7, 'units','normalized','position',[.07 .1 .75 .3])
+    set(hFig7, 'units','normalized','position',[.07 .4 .75 .3])
     
     hold on
     
@@ -211,6 +210,7 @@ if ~isempty(this_trialNo)
     
     y_shift=y_shift+1.5*(per99-per1);
     ylim([0 y_shift])
+    xlim([t(1) t(end)])
     xlabel('time(sec)')
     title('Lick traces')
     
@@ -222,15 +222,24 @@ if ~isempty(this_trialNo)
     end
      
     hFig8 = figure(8);
-    set(hFig8, 'units','normalized','position',[.07 .1 .75 .3])
+    set(hFig8, 'units','normalized','position',[.07 .7 .75 .3])
     
-    %plot(times_lick_freq, lick_freq)
-    [hl1, hp1] = boundedline(times_lick_freq',lick_freq', CIlickf', 'r');
+    
+    if length(this_trialNo)==1
+        plot(times_lick_freq, lick_freq)
+    else
+        [hl1, hp1] = boundedline(times_lick_freq',lick_freq', CIlickf', 'r');
+    end
+    
     ylim([0 1.2*max(lick_freq)])
     xlabel('Time (sec)')
     ylabel('frequency (Hz)')
     title('Lick frequency')
     
+    figure(7)
+    figure(8)
+    figure(1)
+    figure(2)
 end
 
 pfft=1;
